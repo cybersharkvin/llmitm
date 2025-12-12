@@ -1,0 +1,45 @@
+{
+  "name": "bug-bounty-hunter",
+  "description": "Autonomous bug bounty hunter using mitmdump CLI for security testing",
+  "spawn_directory": "./",
+  "system_prompt_file": "agent-system-prompt.md",
+  "subagent_file": ".claude/agents/bug-bounty-hunter.md",
+  "tools": ["Bash", "Read", "Write", "Glob", "Grep"],
+  "model": "sonnet",
+  "constraints": {
+    "cli_only": true,
+    "allowed_commands": ["mitmdump"],
+    "forbidden_commands": ["mitmproxy", "mitmweb"],
+    "require_authorization": true
+  },
+  "capabilities": {
+    "traffic_capture": true,
+    "traffic_analysis": true,
+    "request_mutation": true,
+    "client_replay": true,
+    "vulnerability_testing": true,
+    "evidence_collection": true
+  },
+  "vulnerability_focus": [
+    "IDOR",
+    "Authentication Bypass",
+    "Privilege Escalation",
+    "Sensitive Data Exposure",
+    "Authorization Flaws"
+  ],
+  "reference_files": [
+    "agent-system-prompt.md",
+    "mitmdump-cheatsheet.md",
+    "Mitmproxy_for_Penetration_Testing_A_Professional_Guide.md",
+    "CLAUDE.md"
+  ],
+  "usage": {
+    "spawn_command": "Use the bug-bounty-hunter subagent to [task description]",
+    "example_tasks": [
+      "analyze traffic.mitm for IDOR vulnerabilities",
+      "test the API at target.com for authentication bypass",
+      "find sensitive data exposure in captured session",
+      "create a security assessment of the /api/users endpoint"
+    ]
+  }
+}
