@@ -1,59 +1,52 @@
 {
-  "task": "Initialize git repository with proper structure and gitignore",
+  "task": "Create git commit for containerized llmitm agent changes",
   "objectives": [
-    "Create .gitignore file with appropriate exclusions",
-    "Initialize git repository",
-    "Create initial commit"
+    "Stage all relevant changes",
+    "Write clear, descriptive commit message",
+    "Complete commit without pushing"
   ],
   "dependencies": {
     "prerequisites": [
-      "None - fresh git initialization"
+      "Git repository initialized",
+      "Changes exist to commit"
     ],
     "sequential": [
-      "Create .gitignore file",
-      "Initialize git repo",
-      "Stage all files",
-      "Create initial commit"
+      "Check git status",
+      "Stage changes",
+      "Write commit message",
+      "Execute commit"
     ],
     "parallel": []
   },
   "atomic_actions": [
     {
       "step": 1,
-      "action": "Create .gitignore file with Python, mitmproxy, editor, and OS-specific exclusions",
-      "input": "Knowledge of project type (Python/mitmproxy security tool)",
-      "output": ".gitignore file with appropriate patterns",
-      "file": ".gitignore"
+      "action": "Check current git status to see all modified/new files",
+      "input": "None",
+      "output": "List of staged/unstaged changes",
+      "file": ""
     },
     {
       "step": 2,
-      "action": "Initialize git repository",
-      "input": "Current directory",
-      "output": "Initialized .git directory",
-      "file": ".git/"
+      "action": "Stage all changes for commit",
+      "input": "List of files from status",
+      "output": "Staged changes ready for commit",
+      "file": ""
     },
     {
       "step": 3,
-      "action": "Stage all files for commit",
-      "input": "All project files",
-      "output": "Staged files in git index",
-      "file": "N/A"
-    },
-    {
-      "step": 4,
-      "action": "Create initial commit with descriptive message",
-      "input": "Staged files",
-      "output": "Initial commit hash",
-      "file": "N/A"
+      "action": "Create commit with descriptive message covering: devcontainer setup, network isolation, firewall script, testing fixes",
+      "input": "Staged changes",
+      "output": "Completed git commit",
+      "file": ""
     }
   ],
   "success_criteria": {
     "per_step": [
-      "Verify .gitignore exists and contains Python/mitmproxy patterns",
-      "Verify .git directory exists",
-      "Verify git status shows staged files",
-      "Verify git log shows initial commit"
+      "git status shows changed files",
+      "git add completes without error",
+      "git commit returns success with commit hash"
     ],
-    "overall": "Git repository initialized with proper .gitignore and initial commit containing all project files"
+    "overall": "All containerized llmitm agent changes committed with clear message describing devcontainer, network isolation, and testing fixes"
   }
 }

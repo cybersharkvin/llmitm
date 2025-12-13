@@ -1,0 +1,5 @@
+# LLMitM Python Dependencies
+# ==========================
+# Installed in container via pip
+
+mitmproxy>=10.0.0

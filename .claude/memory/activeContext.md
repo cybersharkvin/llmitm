@@ -2,62 +2,57 @@
 
 ## Current Focus
 
-**Bug Bounty Hunter Agent Creation** - Created a specialized Claude Code subagent for autonomous security testing using mitmdump CLI.
+**Devcontainer Tested and Working** - mitmproxy-ai-tool container builds, firewall initializes correctly, Claude API reachable.
 
 ## Recent Changes
 
-- **Added agent memory files** (2025-12-12)
-  - Location: `mitmproxy-ai-tool/.claude/memory/`
-  - Files: `session.md`, `hypotheses.md`, `findings.md`
-  - Reason: Structured scratchpad for persistent session state and findings
-  - Impact: Agent maintains continuity across sessions, builds report-ready evidence
+- **Container tested successfully** (2025-12-13)
+  - Fixed: `postCreateCommand` needed `sudo` to run iptables as vscode user
+  - Verified: Default-deny firewall active (policy DROP)
+  - Verified: Claude API reachable (160.79.104.10)
+  - Verified: mitmproxy 11.0.2, Claude Code 2.0.69 installed
+  - File changed: `devcontainer.json` line 34 - added `sudo` prefix
 
-- **Created bug-bounty-hunter subagent** (2025-12-12)
-  - Location: `mitmproxy-ai-tool/.claude/agents/bug-bounty-hunter.md`
-  - Reason: Enable autonomous vulnerability discovery using mitmdump CLI
-  - Impact: Self-contained agent spawns from mitmproxy-ai-tool/ directory
+- **Implemented devcontainer with network isolation** (2025-12-13)
+  - Location: `mitmproxy-ai-tool/.devcontainer/`
+  - Files: `Dockerfile`, `devcontainer.json`, `init-firewall.sh`, `targets.conf.example`
+  - Reason: Out-of-the-box Claude Code bug bounty environment with security controls
+  - Impact: Default-deny firewall, only Claude API + whitelisted targets reachable
 
-- **Created comprehensive system prompt** (2025-12-12)
-  - Location: `mitmproxy-ai-tool/CLAUDE.md`
-  - Reason: Provide full playbook with filters, modification patterns, vulnerability workflows
-  - Impact: Agent has complete reference for CLI-only security testing
+- **Previous: Bug Bounty Hunter Agent** (2025-12-12)
+  - Agent, memory files, and playbook already existed
+  - Now containerized with network isolation
 
 ## Next Steps
 
-**IMMEDIATE: Agent Testing**
-1. Test spawning the bug-bounty-hunter subagent
-2. Verify it correctly loads memory files and CLAUDE.md
-3. Test against sample traffic capture
+**IMMEDIATE: Real-World Testing**
+1. Configure authorized target in TARGET_IPS/TARGET_DOMAINS or targets.conf
+2. Re-run `sudo bash .devcontainer/init-firewall.sh` to apply targets
+3. Test mitmproxy capture against authorized target
+4. Verify full CAMRO workflow works end-to-end
 
 **FUTURE: Enhancement**
 1. Add Python addon templates for automated detection
 2. Create sample traffic files for training/testing
+3. Consider CI/CD for container image builds
 
 ## Active Issues
 
-- **None**: Agent created successfully, awaiting testing
+- **None blocking**: Container works as expected
 
 ## Key Decisions
 
-- **Subagent over Skill**: Chose subagent pattern for main entry point
-  - Rationale: Subagents can orchestrate workflows and make decisions
-  - Alternatives: Could have used Skill for reference-only, Agent SDK for programmatic use
-  - Impact: Agent can be invoked directly from Claude Code CLI
+- **Default-Deny Networking**: iptables blocks all outbound except whitelist
+  - Rationale: Prevents accidental scope creep in bug bounty testing
+  - Impact: Only Claude API + configured targets reachable
 
-- **CLI-Only Constraint**: Explicitly forbid mitmproxy/mitmweb
-  - Rationale: Project goal is LLM-operable automation, GUI tools not automatable
-  - Alternatives: None considered, this was a core requirement
-  - Impact: All workflows use mitmdump bash commands only
+- **Three Target Config Methods**: ENV vars, targets.conf file, runtime iptables
+  - Rationale: Flexibility for different workflows
+  - Impact: Can configure at build time or runtime
 
-- **External System Prompt**: Full playbook in separate file
-  - Rationale: Keep subagent file concise, detailed reference easily maintainable
-  - Alternatives: Embed all content in subagent file
-  - Impact: Agent reads `agent-system-prompt.md` on first action
-
-- **Self-Contained Directory**: Agent lives in `mitmproxy-ai-tool/.claude/`
-  - Rationale: Isolation from parent project, spawns from its own working directory
-  - Alternatives: Place in root `.claude/agents/` (rejected - pollutes parent project)
-  - Impact: Must `cd mitmproxy-ai-tool/` before invoking agent
+- **Named Docker Volumes**: captures/ and certs/ persist across rebuilds
+  - Rationale: Don't lose evidence or CA certs on container rebuild
+  - Impact: Data survives `devcontainer rebuild`
 
 ---
 

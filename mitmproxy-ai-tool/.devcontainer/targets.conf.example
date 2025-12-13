@@ -1,0 +1,24 @@
+# LLMitM Target Whitelist
+# =======================
+# Add authorized bug bounty targets here.
+# One target per line. Supports:
+#   - IP addresses: 192.168.1.100
+#   - CIDR ranges: 10.0.0.0/24
+#   - Domains: api.target.com (resolved at container start)
+#
+# Lines starting with # are comments.
+# Copy to targets.conf and edit for your engagement:
+#   cp targets.conf.example targets.conf
+#
+# The firewall will ONLY allow traffic to:
+#   1. Claude API (api.anthropic.com)
+#   2. Targets listed in this file
+#   3. Targets in TARGET_IPS/TARGET_DOMAINS environment variables
+#
+# All other outbound traffic is BLOCKED.
+
+# Example targets (uncomment to use):
+# 192.168.1.100
+# 10.0.0.0/24
+# api.target.com
+# app.target.com

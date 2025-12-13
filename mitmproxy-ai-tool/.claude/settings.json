@@ -1,0 +1,25 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mitmdump:*)",
+      "Bash(iptables:*)",
+      "Bash(curl:*)",
+      "Bash(dig:*)",
+      "Bash(nc:*)",
+      "Bash(cat:*)",
+      "Bash(ls:*)",
+      "Bash(grep:*)",
+      "Bash(diff:*)",
+      "Bash(dmesg:*)",
+      "Read",
+      "Write",
+      "Glob",
+      "Grep"
+    ],
+    "deny": [
+      "Bash(rm -rf /)*",
+      "Bash(shutdown)*",
+      "Bash(reboot)*"
+    ]
+  }
+}

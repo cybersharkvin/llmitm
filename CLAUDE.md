@@ -13,7 +13,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 @.claude/memory/projectProgress.md
 @.claude/memory/tags.md
 
-**Do not skip this step.** These files contain persistent context that survives between sessions.
+**You MUST NOT skip this step.** These files contain persistent context that survives between sessions.
 
 ---
 
@@ -35,55 +35,55 @@ This project uses a memory file system for persistent context across Claude Code
 | `systemPatterns.md` | Architectural patterns and design decisions |
 | `techContext.md` | Tech stack, dependencies, constraints |
 | `projectProgress.md` | Completed features, known issues, technical debt |
-| `tags.md` | Auto-generated codebase inventory (**never edit manually**) |
+| `tags.md` | Auto-generated codebase inventory (**MUST NOT edit manually**) |
 
 ---
 
 ## When to Update Memory Files
 
-### `activeContext.md` — Update FREQUENTLY
+### `activeContext.md` — MUST Update FREQUENTLY
 
-**Update after:**
+**You MUST update after:**
 - Completing any significant task or feature
 - Making architectural decisions
 - Discovering important issues or blockers
 - Changing working focus or context
 - End of every work session
 
-**Include:**
+**You MUST include:**
 - What was just completed (with file paths)
 - Current state of work in progress
 - Immediate next steps
 - Any blockers or decisions needed
 
-**Keep it current** — This is the "working memory" for the next session.
+**You SHOULD keep it current** — This is the "working memory" for the next session.
 
 ---
 
-### `projectProgress.md` — Update after COMPLETING features
+### `projectProgress.md` — MUST Update after COMPLETING features
 
-**Update after:**
+**You MUST update after:**
 - Finishing a feature (move from "In Progress" to "Completed")
 - Discovering bugs or technical debt
 - Identifying new known issues
 - Major milestones
 
-**Include:**
+**You MUST include:**
 - Completion dates for features
 - Known issues with priority
 - Technical debt items with reasoning
 
 ---
 
-### `systemPatterns.md` — Update after ESTABLISHING patterns
+### `systemPatterns.md` — MUST Update after ESTABLISHING patterns
 
-**Update after:**
+**You MUST update after:**
 - Creating new architectural patterns
 - Establishing coding conventions
 - Making significant design decisions
 - Adding new integration patterns
 
-**Include:**
+**You MUST include:**
 - Pattern name and purpose
 - When to use the pattern
 - Key files/functions involved
@@ -91,16 +91,16 @@ This project uses a memory file system for persistent context across Claude Code
 
 ---
 
-### `techContext.md` — Update after CHANGING dependencies
+### `techContext.md` — MUST Update after CHANGING dependencies
 
-**Update after:**
+**You MUST update after:**
 - Adding new dependencies
 - Removing dependencies
 - Updating configuration files
 - Changing build/test commands
 - Modifying environment variables
 
-**Include:**
+**You MUST include:**
 - Dependency name and version
 - Why it was added
 - How it's used
@@ -108,18 +108,18 @@ This project uses a memory file system for persistent context across Claude Code
 
 ---
 
-### `projectBrief.md` — Update RARELY
+### `projectBrief.md` — SHOULD Update RARELY
 
-**Update only when:**
+**You SHOULD update only when:**
 - Project scope fundamentally changes
 - Core requirements are added/removed
 - Success criteria change
 
-**This file should remain stable** — only update for major scope changes.
+**This file SHOULD remain stable** — update only for major scope changes.
 
 ---
 
-### `tags.md` — NEVER edit manually
+### `tags.md` — MUST NOT Edit Manually
 
 This file is auto-generated. It provides codebase inventory:
 - Component locations
@@ -127,14 +127,4 @@ This file is auto-generated. It provides codebase inventory:
 - Interface definitions
 - Configuration mappings
 
-**Always check tags.md before creating new code** to avoid duplication.
-
----
-
-## What NOT to Include in Memory Files
-
-- Duplicate information across files
-- Implementation details that belong in code comments
-- Temporary debugging notes
-- Content already in tags.md (file locations, function lists)
-- Verbose explanations when concise ones suffice
+**You MUST check tags.md before creating new code** to avoid duplication.

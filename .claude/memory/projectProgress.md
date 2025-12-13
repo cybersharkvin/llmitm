@@ -9,7 +9,7 @@
   - Completed: Pre-existing
 
 - **Bug Bounty Hunter Agent**: Autonomous security testing subagent
-  - Location: `mitmproxy-ai-tool/.claude/agents/bug-bounty-hunter.md`
+  - Location: `mitmproxy-ai-tool/.claude/agents/llmitm.md`
   - Playbook: `mitmproxy-ai-tool/CLAUDE.md`
   - Memory files: `mitmproxy-ai-tool/.claude/memory/`
     - `session.md` - Target, captured files, proxy state
@@ -22,18 +22,46 @@
   - Evidence collection procedures
   - Completed: 2025-12-12
 
+- **Devcontainer with Network Isolation**: IP-restricted environment for bug bounty testing
+  - Location: `mitmproxy-ai-tool/.devcontainer/`
+  - Files:
+    - `Dockerfile` - Ubuntu 22.04, Node.js 20, mitmproxy, Claude Code CLI
+    - `devcontainer.json` - NET_ADMIN capability, volume mounts, port forwarding
+    - `init-firewall.sh` - Default-deny outbound, Claude API + target whitelist
+    - `targets.conf.example` - Target configuration template
+  - Supporting files:
+    - `.claude/settings.json` - Permissions for security tools
+    - `requirements.txt` - Python dependencies
+    - `.env.example` - Environment variable template
+  - Features:
+    - Default-deny iptables firewall
+    - Three methods to configure targets (env vars, conf file, runtime)
+    - Named volumes for captures/certs persistence
+    - Logged dropped packets for debugging
+  - Completed: 2025-12-13
+
+- **Container Testing**: Validated devcontainer builds and runs correctly
+  - Fixed: `postCreateCommand` needed `sudo` for iptables (vscode user lacks root)
+  - Verified: Default-deny firewall active, Claude API reachable
+  - Verified: mitmproxy 11.0.2, Claude Code 2.0.69 installed
+  - Completed: 2025-12-13
+
 ## In Progress
 
-- **None**: Agent creation complete, awaiting testing
+- **None**: Ready for real-world bug bounty testing
 
 ## Pending Features
 
-**Phase 1: Agent Enhancement**
+**Phase 1: Real-World Testing**
+- Configure authorized target and test full CAMRO workflow
+- Test mitmproxy capture/replay against live target
+
+**Phase 2: Agent Enhancement**
 - Python addon templates for automated detection
 - Sample traffic files for testing
 - Evidence/report templates
 
-**Phase 2: Workflow Integration**
+**Phase 3: Workflow Integration**
 - Integration with broader bug bounty workflow
 - Automated reconnaissance patterns
 - Finding aggregation and deduplication
