@@ -58,8 +58,8 @@ LLMitM transforms mitmproxy's CLI (`mitmdump`) into an LLM-operated security tes
 
 ```bash
 # 1. Clone repository
-git clone <repo-url>
-cd ATOMIC
+git clone <repo-url> llmitm
+cd llmitm
 
 # 2. Configure environment
 cp .env.example .env
@@ -77,7 +77,7 @@ claude --dangerously-skip-permissions
 
 ### Option 2: VS Code Devcontainer
 
-1. Open ATOMIC folder (repo root) in VS Code
+1. Open llmitm folder (repo root) in VS Code
 2. Click "Reopen in Container" when prompted
 3. VS Code uses `docker-compose.yml` from repo root
 4. Open terminal and run `claude`
@@ -148,14 +148,15 @@ The agent can do anything inside the container but **cannot escape network restr
 claude
 ```
 
-Uses permission rules from `.claude/settings.json`.
+Uses permission rules from `mitmproxy-ai-tool/.claude/settings.json`.
 
 ---
 
 ## Project Structure
 
 ```
-ATOMIC/                              # Repository root (user controls infrastructure)
+llmitm/                              # Repository root (user controls infrastructure)
+├── README.md                        # This file
 ├── docker-compose.yml               # Two-container orchestration
 ├── .env.example                     # Environment template
 ├── .env                             # Your config (gitignored)
@@ -184,7 +185,7 @@ ATOMIC/                              # Repository root (user controls infrastruc
 ```
 
 **Security Boundary:**
-- `ATOMIC/` (repo root) = User-controlled infrastructure
+- `llmitm/` (repo root) = User-controlled infrastructure
 - `mitmproxy-ai-tool/` = Agent's visible working directory
 - Agent sees `/workspace` which maps to `mitmproxy-ai-tool/` only
 
@@ -308,9 +309,9 @@ curl -v https://api.anthropic.com
 
 ## Documentation
 
-- **[CLAUDE.md](CLAUDE.md)** - Agent playbook with filters, modifications, workflows
-- **[mitmdump-cheatsheet.md](mitmdump-cheatsheet.md)** - Complete CLI reference
-- **[Penetration Testing Guide](Mitmproxy_for_Penetration_Testing_A_Professional_Guide.md)** - Advanced techniques
+- **[Agent Playbook](mitmproxy-ai-tool/CLAUDE.md)** - Filters, modifications, workflows
+- **[CLI Cheatsheet](mitmproxy-ai-tool/mitmdump-cheatsheet.md)** - Complete mitmdump reference
+- **[Penetration Testing Guide](mitmproxy-ai-tool/Mitmproxy_for_Penetration_Testing_A_Professional_Guide.md)** - Advanced techniques
 
 ---
 
@@ -330,4 +331,4 @@ The two-container architecture prevents accidental scope creep by ensuring the a
 
 ## License
 
-See upstream mitmproxy license in `repos/mitmproxy/LICENSE`.
+See upstream mitmproxy license.
