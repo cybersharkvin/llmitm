@@ -67,15 +67,18 @@ LLMitM transforms mitmproxy's CLI (`mitmdump`) into an LLM-operated security tes
 
 **From scratch (includes Juice Shop setup):**
 
-```bash
-# 1. Launch Juice Shop (your target)
-docker run -d --name juice-shop -p 3000:3000 bkimminich/juice-shop
 
-# 2. Get the Juice Shop container IP
+1. Launch Juice Shop (your target)
+```bash
+docker run -d --name juice-shop -p 3000:3000 bkimminich/juice-shop
+```
+2. Get the Juice Shop container IP
+```bash
 docker inspect juice-shop | grep IPAddress
 # Note this IP (e.g., 172.17.0.2)
-
-# 3. Clone and open in VS Code
+```
+3. Clone and open in VS Code
+```bash
 git clone <repo-url> llmitm
 code llmitm
 ```
@@ -95,8 +98,6 @@ code llmitm
    ```
 
 7. **Hunt** → Type: `Test the target for IDOR vulnerabilities`
-
-> **Already have Juice Shop running?** Skip to step 3.
 
 ---
 
@@ -132,8 +133,6 @@ claude --dangerously-skip-permissions --agent llmitm
 
 # 8. Hunt → Type: "Test the target for IDOR vulnerabilities"
 ```
-
-> **Already have Juice Shop running?** Skip to step 3.
 
 ---
 
