@@ -54,7 +54,25 @@ LLMitM transforms mitmproxy's CLI (`mitmdump`) into an LLM-operated security tes
 
 ## Quick Start
 
-### Option 1: Docker Compose (Standalone)
+### Option 1: VS Code Devcontainer (Recommended)
+
+1. **Clone & Open** → Clone repo and open in VS Code
+2. **Configure** → Edit `.env` with your API key and target:
+   ```bash
+   cp .env.example .env
+   # Set CLAUDE_API_KEY=sk-ant-...
+   # Set TARGET_DOMAINS=<target-ip-or-domain>
+   ```
+3. **Container** → Click "Reopen in Container" when prompted
+4. **Launch** → Open terminal and run:
+   ```bash
+   claude --dangerously-skip-permissions --agent llmitm
+   ```
+5. **Hunt** → Type a prompt like "Test the target for IDOR vulnerabilities"
+
+The pentest atomizer automatically breaks down your request into a CAMRO workflow, and the llmitm agent executes it autonomously—updating memory files as it captures, analyzes, mutates, replays, and observes.
+
+### Option 2: Docker Compose (Standalone)
 
 ```bash
 # 1. Clone repository
@@ -65,28 +83,19 @@ cd llmitm
 cp .env.example .env
 # Edit .env with CLAUDE_API_KEY and TARGET_DOMAINS
 
-# 3. Start containers (from repo root)
+# 3. Start containers
 docker-compose up -d
 
-# 4. Enter agent container
+# 4. Enter agent container and launch
 docker-compose exec llmitm bash
-
-# 5. Start Claude
-claude --dangerously-skip-permissions
+claude --dangerously-skip-permissions --agent llmitm
 ```
-
-### Option 2: VS Code Devcontainer
-
-1. Open llmitm folder (repo root) in VS Code
-2. Click "Reopen in Container" when prompted
-3. VS Code uses `docker-compose.yml` from repo root
-4. Open terminal and run `claude`
 
 ### Prerequisites
 
 - Docker Desktop or Docker Engine
 - Claude API key (get from https://console.anthropic.com/)
-- (VS Code) Remote - Containers extension
+- VS Code + Remote Containers extension (for Option 1)
 
 ---
 
