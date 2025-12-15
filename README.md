@@ -22,25 +22,25 @@ LLMitM transforms mitmproxy's CLI (`mitmdump`) into an LLM-operated security tes
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│ Docker Compose                                                               │
-│                                                                              │
-│  ┌─────────────────┐         ┌────────────────────────────────────────────┐ │
-│  │ firewall        │         │ llmitm                                     │ │
-│  │ (squid proxy)   │◄───────►│ (claude + mitmproxy)                       │ │
-│  │                 │         │                                            │ │
-│  │ ✓ Internet      │         │ ✗ No internet access                       │ │
-│  │ ✓ Allowlist     │         │ ✗ No NET_ADMIN capability                  │ │
-│  │ ✓ NET_ADMIN     │         │ ✓ Full agent autonomy inside              │ │
-│  └────────┬────────┘         └────────────────────────────────────────────┘ │
-│           │                              │                                   │
-│      external                       internal                                 │
-│      network                        network (isolated)                       │
-└───────────┼──────────────────────────────┼───────────────────────────────────┘
-            │                              │
-            ▼                              ▼
-        Internet                     No route out
-    (Claude API + targets)       (all traffic via proxy)
+┌────────────────────────────────────────────────────────────────────────────┐
+│ Docker Compose                                                             │
+│                                                                            │
+│  ┌─────────────────┐        ┌───────────────────────────────────────────┐  │
+│  │ firewall        │        │ llmitm                                    │  │
+│  │ (squid proxy)   │◄──────►│ (claude + mitmproxy)                      │  │
+│  │                 │        │                                           │  │
+│  │ ✓ Internet      │        │ ✗ No internet access                     │  │
+│  │ ✓ Allowlist     │        │ ✗ No NET_ADMIN capability                │  │
+│  │ ✓ NET_ADMIN     │        │ ✓ Full agent autonomy inside             │  │
+│  └────────┬────────┘        └───────────────────────────────────────────┘  │
+│           │                             │                                  │
+│      external                      internal                                │
+│      network                       network (isolated)                      │
+└───────────┼─────────────────────────────┼──────────────────────────────────┘
+            │                             │
+            ▼                             ▼
+        Internet                    No route out
+    (Claude API + targets)      (all traffic via proxy)
 ```
 
 **Security Model:**
@@ -325,7 +325,7 @@ This tool is designed for **authorized security testing only**:
 
 **Never use against systems without permission.**
 
-The two-container architecture prevents accidental scope creep by ensuring the agent can only reach explicitly whitelisted targets. The security boundary prevents the agent from even viewing the infrastructure configuration.
+The two-container architecture prevents accidental scope creep by ensuring the agent can only reach explicitly allowlisted targets. The security boundary prevents the agent from even viewing the infrastructure configuration.
 
 ---
 
