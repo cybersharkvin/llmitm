@@ -1,6 +1,8 @@
 # LLMitM - LLM-in-the-Middle Proxy
 
-An autonomous bug bounty hunting agent that operates mitmdump CLI to capture, analyze, mutate, and replay HTTP/HTTPS traffic for security testing.
+An autonomous bug bounty hunting agent that operates [mitmproxy](https://mitmproxy.org/)'s CLI to capture, analyze, mutate, and replay HTTP/HTTPS traffic for security testing.
+
+Built for use with [OWASP Juice Shop](https://owasp.org/www-project-juice-shop/) and other intentionally vulnerable applications.
 
 ## Overview
 
@@ -54,48 +56,104 @@ LLMitM transforms mitmproxy's CLI (`mitmdump`) into an LLM-operated security tes
 
 ## Quick Start
 
-### Option 1: VS Code Devcontainer (Recommended)
-
-1. **Clone & Open** → Clone repo and open in VS Code
-2. **Configure** → Edit `.env` with your API key and target:
-   ```bash
-   cp .env.example .env
-   # Set CLAUDE_API_KEY=sk-ant-...
-   # Set TARGET_DOMAINS=<target-ip-or-domain>
-   ```
-3. **Container** → Click "Reopen in Container" when prompted
-4. **Launch** → Open terminal and run:
-   ```bash
-   claude --dangerously-skip-permissions --agent llmitm
-   ```
-5. **Hunt** → Type a prompt like "Test the target for IDOR vulnerabilities"
-
-The pentest atomizer automatically breaks down your request into a CAMRO workflow, and the llmitm agent executes it autonomously—updating memory files as it captures, analyzes, mutates, replays, and observes.
-
-### Option 2: Docker Compose (Standalone)
-
-```bash
-# 1. Clone repository
-git clone <repo-url> llmitm
-cd llmitm
-
-# 2. Configure environment
-cp .env.example .env
-# Edit .env with CLAUDE_API_KEY and TARGET_DOMAINS
-
-# 3. Start containers
-docker-compose up -d
-
-# 4. Enter agent container and launch
-docker-compose exec llmitm bash
-claude --dangerously-skip-permissions --agent llmitm
-```
-
 ### Prerequisites
 
 - Docker Desktop or Docker Engine
-- Claude API key (get from https://console.anthropic.com/)
-- VS Code + Remote Containers extension (for Option 1)
+- VS Code + [Dev Containers](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-containers) extension (for Option 1)
+
+---
+
+### Option 1: VS Code Devcontainer (Recommended)
+
+**From scratch (includes Juice Shop setup):**
+
+```bash
+# 1. Launch Juice Shop (your target)
+docker run -d --name juice-shop -p 3000:3000 bkimminich/juice-shop
+
+# 2. Get the Juice Shop container IP
+docker inspect juice-shop | grep IPAddress
+# Note this IP (e.g., 172.17.0.2)
+
+# 3. Clone and open in VS Code
+git clone <repo-url> llmitm
+code llmitm
+```
+
+4. **Configure target** → Edit `.env`:
+   ```bash
+   cp .env.example .env
+   # Set TARGET_DOMAINS to your Juice Shop IP:
+   # TARGET_DOMAINS=172.17.0.2
+   ```
+
+5. **Open container** → Click "Reopen in Container" when VS Code prompts
+
+6. **Launch agent** → Open terminal (Ctrl+`) and run:
+   ```bash
+   claude --dangerously-skip-permissions --agent llmitm
+   ```
+
+7. **Hunt** → Type: `Test the target for IDOR vulnerabilities`
+
+> **Already have Juice Shop running?** Skip to step 3.
+
+---
+
+### Option 2: Docker Compose (Standalone)
+
+**From scratch (includes Juice Shop setup):**
+
+```bash
+# 1. Launch Juice Shop (your target)
+docker run -d --name juice-shop -p 3000:3000 bkimminich/juice-shop
+
+# 2. Get the Juice Shop container IP
+docker inspect juice-shop | grep IPAddress
+# Note this IP (e.g., 172.17.0.2)
+
+# 3. Clone repository
+git clone <repo-url> llmitm
+cd llmitm
+
+# 4. Configure target
+cp .env.example .env
+# Edit .env and set TARGET_DOMAINS to your Juice Shop IP:
+#   TARGET_DOMAINS=172.17.0.2
+
+# 5. Start llmitm containers
+docker-compose up -d
+
+# 6. Enter agent container
+docker-compose exec llmitm bash
+
+# 7. Launch agent
+claude --dangerously-skip-permissions --agent llmitm
+
+# 8. Hunt → Type: "Test the target for IDOR vulnerabilities"
+```
+
+> **Already have Juice Shop running?** Skip to step 3.
+
+---
+
+### How It Works
+
+When you type a prompt, the **pentest atomizer** (a Haiku-powered hook) automatically breaks down your request into a structured CAMRO plan. The **llmitm agent** then executes it autonomously:
+
+```
+Your prompt
+    ↓
+Atomizer creates CAMRO plan → .claude/memory/task.md
+    ↓
+llmitm agent executes mitmdump commands
+    ↓
+Updates memory files (session.md, hypotheses.md, findings.md)
+    ↓
+CAPTURE → ANALYZE → MUTATE → REPLAY → OBSERVE
+```
+
+Sit back and watch it work.
 
 ---
 
@@ -103,20 +161,23 @@ claude --dangerously-skip-permissions --agent llmitm
 
 ### Target Allowlist
 
-Edit `.env` at repo root to add authorized bug bounty targets:
+Edit `.env` at repo root to configure your target:
 
 ```bash
-# Domains (recommended)
+# Your target (Juice Shop IP, bug bounty domain, etc.)
+TARGET_DOMAINS=172.17.0.2
+
+# Multiple targets (comma-separated)
 TARGET_DOMAINS=api.target.com,app.target.com
 
-# IPs or CIDRs (for direct IP access)
+# Direct IP access (alternative to domains)
 TARGET_IPS=192.168.1.100,10.0.0.0/24
 ```
 
-**Always allowed:**
+**Always allowed (hardcoded in firewall):**
 - `api.anthropic.com` - Claude API
 - `claude.ai` - Claude API
-- `statsig.anthropic.com` - Telemetry (can be removed from firewall config)
+- `statsig.anthropic.com` - Telemetry
 
 ### Verify Network Isolation
 
@@ -338,6 +399,27 @@ The two-container architecture prevents accidental scope creep by ensuring the a
 
 ---
 
+## Attribution
+
+This project builds on the work of:
+
+### mitmproxy
+
+- **Website**: [mitmproxy.org](https://mitmproxy.org/)
+- **GitHub**: [github.com/mitmproxy/mitmproxy](https://github.com/mitmproxy/mitmproxy)
+- **License**: MIT
+- **Description**: An interactive TLS-capable intercepting HTTP proxy for penetration testers and software developers.
+
+### OWASP Juice Shop
+
+- **Website**: [owasp.org/www-project-juice-shop](https://owasp.org/www-project-juice-shop/)
+- **GitHub**: [github.com/juice-shop/juice-shop](https://github.com/juice-shop/juice-shop)
+- **License**: MIT
+- **Description**: Probably the most modern and sophisticated insecure web application for security training, awareness demos, and CTFs.
+- **Docker Hub**: [hub.docker.com/r/bkimminich/juice-shop](https://hub.docker.com/r/bkimminich/juice-shop)
+
+---
+
 ## License
 
-See upstream mitmproxy license.
+MIT - See upstream mitmproxy and Juice Shop licenses for their respective components.
