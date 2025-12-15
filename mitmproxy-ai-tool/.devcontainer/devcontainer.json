@@ -1,28 +1,12 @@
 {
   "name": "LLMitM Bug Bounty Hunter",
-  "build": {
-    "dockerfile": "Dockerfile",
-    "context": "."
-  },
 
-  "runArgs": [
-    "--cap-add=NET_ADMIN",
-    "--cap-add=NET_RAW"
-  ],
+  // Use docker-compose for multi-container setup
+  "dockerComposeFile": ["../docker-compose.yml"],
+  "service": "llmitm",
+  "workspaceFolder": "/workspace",
 
-  "containerEnv": {
-    "CLAUDE_API_KEY": "${localEnv:CLAUDE_API_KEY}",
-    "TARGET_IPS": "${localEnv:TARGET_IPS}",
-    "TARGET_DOMAINS": "${localEnv:TARGET_DOMAINS}",
-    "MITMPROXY_PORT": "8080"
-  },
-
-  "mounts": [
-    "source=${localWorkspaceFolder},target=/workspace,type=bind",
-    "source=llmitm-captures,target=/workspace/captures,type=volume",
-    "source=llmitm-certs,target=/workspace/certs,type=volume"
-  ],
-
+  // Forward mitmproxy port
   "forwardPorts": [8080],
   "portsAttributes": {
     "8080": {
@@ -31,9 +15,10 @@
     }
   },
 
-  "postCreateCommand": "sudo bash .devcontainer/init-firewall.sh",
-  "postStartCommand": "mitmdump --version && claude --version",
+  // No postCreateCommand needed - firewall sidecar handles network isolation
+  "postStartCommand": "mitmdump --version && claude --version && echo 'Network isolation: Active (via firewall sidecar)'",
 
+  // VS Code customizations
   "customizations": {
     "vscode": {
       "extensions": [

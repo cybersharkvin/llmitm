@@ -8,14 +8,13 @@ LABEL description="Claude Code Bug Bounty Hunter with mitmproxy"
 ENV DEBIAN_FRONTEND=noninteractive
 
 # Install system dependencies
+# NOTE: No iptables - network isolation handled by firewall sidecar
 RUN apt-get update && apt-get install -y \
     # Node.js prerequisites
     curl \
     ca-certificates \
     gnupg \
-    # Network tools (firewall)
-    iptables \
-    iproute2 \
+    # Network debugging (no admin tools)
     netcat-openbsd \
     dnsutils \
     # Python
@@ -47,10 +46,6 @@ RUN pip3 install --no-cache-dir mitmproxy
 RUN mkdir -p /home/vscode/captures \
              /home/vscode/certs \
              /home/vscode/.claude
-
-# Copy firewall script
-COPY init-firewall.sh /usr/local/bin/init-firewall.sh
-RUN chmod +x /usr/local/bin/init-firewall.sh
 
 # Set shell to zsh
 RUN chsh -s /bin/zsh vscode
