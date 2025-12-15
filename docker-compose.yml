@@ -1,5 +1,14 @@
 version: "3.8"
 
+# =============================================================================
+# LLMitM Bug Bounty Hunter - Two-Container Architecture
+# =============================================================================
+# SECURITY MODEL:
+#   - .devcontainer/ and docker-compose.yml are at repo root (user controls infra)
+#   - mitmproxy-ai-tool/ is the agent's working directory (agent-visible)
+#   - Agent container CANNOT see container config or docker-compose.yml
+# =============================================================================
+
 services:
   # =============================================================================
   # FIREWALL SIDECAR - Controls all egress from llmitm container
@@ -53,11 +62,14 @@ services:
       - https_proxy=http://172.28.0.2:3128
       - NO_PROXY=localhost,127.0.0.1
     volumes:
-      # Workspace - writable for agent work
-      - ./:/workspace
-      # Config directories - READ ONLY (agent cannot modify)
-      - ./.devcontainer:/workspace/.devcontainer:ro
-      - ./.claude:/workspace/.claude:ro
+      # =========================================================================
+      # SECURITY BOUNDARY: Agent only sees mitmproxy-ai-tool/ contents
+      # Agent CANNOT see: docker-compose.yml, .devcontainer/, or repo root files
+      # =========================================================================
+      # Workspace - mitmproxy-ai-tool directory only
+      - ./mitmproxy-ai-tool:/workspace
+      # Agent config - READ ONLY (agent cannot modify its own settings)
+      - ./mitmproxy-ai-tool/.claude:/workspace/.claude:ro
       # Data volumes - writable for captures and certs
       - llmitm-captures:/workspace/captures
       - llmitm-certs:/workspace/certs

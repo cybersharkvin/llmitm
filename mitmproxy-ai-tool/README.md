@@ -47,7 +47,8 @@ LLMitM transforms mitmproxy's CLI (`mitmdump`) into an LLM-operated security tes
 - Agent container has **no direct internet access**
 - Agent container has **no capability to modify firewall rules**
 - All egress flows through firewall sidecar with allowlist
-- `.claude/` and `.devcontainer/` are mounted **read-only**
+- Agent config (`.claude/`) is mounted **read-only**
+- Agent **cannot see** `docker-compose.yml` or `.devcontainer/` (infrastructure files)
 
 ---
 
@@ -56,27 +57,29 @@ LLMitM transforms mitmproxy's CLI (`mitmdump`) into an LLM-operated security tes
 ### Option 1: Docker Compose (Standalone)
 
 ```bash
-# 1. Clone and configure
+# 1. Clone repository
 git clone <repo-url>
-cd mitmproxy-ai-tool
+cd ATOMIC
+
+# 2. Configure environment
 cp .env.example .env
 # Edit .env with CLAUDE_API_KEY and TARGET_DOMAINS
 
-# 2. Start containers
+# 3. Start containers (from repo root)
 docker-compose up -d
 
-# 3. Enter agent container
+# 4. Enter agent container
 docker-compose exec llmitm bash
 
-# 4. Start Claude
-claude --dangerously-skip-permissions --agent llmitm
+# 5. Start Claude
+claude --dangerously-skip-permissions
 ```
 
 ### Option 2: VS Code Devcontainer
 
-1. Open folder in VS Code
+1. Open ATOMIC folder (repo root) in VS Code
 2. Click "Reopen in Container" when prompted
-3. VS Code uses `docker-compose.yml` as backend
+3. VS Code uses `docker-compose.yml` from repo root
 4. Open terminal and run `claude`
 
 ### Prerequisites
@@ -91,7 +94,7 @@ claude --dangerously-skip-permissions --agent llmitm
 
 ### Target Allowlist
 
-Edit `.env` to add authorized bug bounty targets:
+Edit `.env` at repo root to add authorized bug bounty targets:
 
 ```bash
 # Domains (recommended)
@@ -137,6 +140,7 @@ The agent can do anything inside the container but **cannot escape network restr
 1. No internet gateway on internal network
 2. No NET_ADMIN capability to modify iptables
 3. Config directories are read-only
+4. Agent cannot see infrastructure files (docker-compose.yml, .devcontainer/)
 
 ### Standard Mode
 
@@ -151,30 +155,38 @@ Uses permission rules from `.claude/settings.json`.
 ## Project Structure
 
 ```
-mitmproxy-ai-tool/
-├── docker-compose.yml           # Two-container orchestration
-├── .env.example                 # Environment template
-├── .devcontainer/
-│   ├── devcontainer.json        # VS Code integration (uses compose)
-│   ├── Dockerfile               # Agent container image
+ATOMIC/                              # Repository root (user controls infrastructure)
+├── docker-compose.yml               # Two-container orchestration
+├── .env.example                     # Environment template
+├── .env                             # Your config (gitignored)
+├── .devcontainer/                   # Container definitions
+│   ├── devcontainer.json            # VS Code integration
+│   ├── Dockerfile                   # Agent container image
 │   └── firewall/
-│       ├── Dockerfile           # Firewall sidecar image
-│       ├── entrypoint.sh        # Allowlist configuration
-│       └── squid.conf           # Proxy configuration
-├── .claude/
-│   ├── agents/
-│   │   └── llmitm.md            # Subagent definition
-│   ├── memory/
-│   │   ├── session.md           # Current target, captures, proxy state
-│   │   ├── hypotheses.md        # Test theories and queue
-│   │   └── findings.md          # Confirmed vulnerabilities
-│   └── settings.json            # Claude Code permissions
-├── captures/                    # Traffic capture files (volume)
-├── certs/                       # mitmproxy CA certificates (volume)
-├── CLAUDE.md                    # Agent playbook
-├── mitmdump-cheatsheet.md       # CLI command reference
-└── Mitmproxy_for_Penetration_Testing_A_Professional_Guide.md
+│       ├── Dockerfile               # Firewall sidecar image
+│       ├── entrypoint.sh            # Allowlist configuration
+│       └── squid.conf               # Proxy configuration
+│
+└── mitmproxy-ai-tool/               # Agent working directory (/workspace)
+    ├── .claude/
+    │   ├── agents/
+    │   │   └── llmitm.md            # Subagent definition
+    │   ├── memory/
+    │   │   ├── session.md           # Current target, captures, proxy state
+    │   │   ├── hypotheses.md        # Test theories and queue
+    │   │   └── findings.md          # Confirmed vulnerabilities
+    │   └── settings.json            # Claude Code permissions
+    ├── captures/                    # Traffic capture files (volume)
+    ├── certs/                       # mitmproxy CA certificates (volume)
+    ├── CLAUDE.md                    # Agent playbook
+    ├── mitmdump-cheatsheet.md       # CLI command reference
+    └── Mitmproxy_for_Penetration_Testing_A_Professional_Guide.md
 ```
+
+**Security Boundary:**
+- `ATOMIC/` (repo root) = User-controlled infrastructure
+- `mitmproxy-ai-tool/` = Agent's visible working directory
+- Agent sees `/workspace` which maps to `mitmproxy-ai-tool/` only
 
 ---
 
@@ -249,7 +261,7 @@ mitmdump -nr traffic.mitm "~bs password|api_key|secret|token" --flow-detail 3
 ## Viewing Firewall Logs
 
 ```bash
-# From firewall container
+# From repo root (not inside container)
 docker-compose logs firewall
 
 # Real-time
@@ -265,7 +277,7 @@ Squid logs show allowed/denied requests with timestamps.
 ### Agent can't reach Claude API
 
 ```bash
-# Check firewall is running
+# Check firewall is running (from repo root)
 docker-compose ps
 
 # Check firewall logs
@@ -277,7 +289,7 @@ curl -v https://api.anthropic.com
 
 ### Agent can't reach target
 
-1. Verify target is in `.env`:
+1. Verify target is in `.env` at repo root:
    ```bash
    grep TARGET .env
    ```
@@ -312,7 +324,7 @@ This tool is designed for **authorized security testing only**:
 
 **Never use against systems without permission.**
 
-The two-container architecture prevents accidental scope creep by ensuring the agent can only reach explicitly whitelisted targets.
+The two-container architecture prevents accidental scope creep by ensuring the agent can only reach explicitly whitelisted targets. The security boundary prevents the agent from even viewing the infrastructure configuration.
 
 ---
 

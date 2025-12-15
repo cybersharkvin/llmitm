@@ -2,6 +2,7 @@
   "name": "LLMitM Bug Bounty Hunter",
 
   // Use docker-compose for multi-container setup
+  // Note: docker-compose.yml is at repository root (../docker-compose.yml)
   "dockerComposeFile": ["../docker-compose.yml"],
   "service": "llmitm",
   "workspaceFolder": "/workspace",
