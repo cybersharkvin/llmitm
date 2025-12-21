@@ -69,14 +69,10 @@ echo -e "- Settings file: EXISTS\n" >> "$DEBUG_LOG"
 # This schema is specifically designed for the llmitm bug bounty hunter agent.
 # It produces plans with executable mitmdump commands following the CAMRO workflow.
 
-read -r -d '' JSON_SCHEMA << 'SCHEMA_EOF'
-{
+JSON_SCHEMA='{
   "type": "object",
   "properties": {
-    "task": {
-      "type": "string",
-      "description": "Brief security testing objective"
-    },
+    "task": { "type": "string", "description": "Brief security testing objective" },
     "assumptions": {
       "type": "array",
       "items": { "type": "string" },
@@ -190,8 +186,7 @@ read -r -d '' JSON_SCHEMA << 'SCHEMA_EOF'
     }
   },
   "required": ["task", "assumptions", "target_analysis", "objectives", "dependencies", "atomic_actions", "success_criteria"]
-}
-SCHEMA_EOF
+}'
 
 echo -e "## Phase 5: JSON Schema" >> "$DEBUG_LOG"
 echo -e "- Schema defined for constrained output" >> "$DEBUG_LOG"
