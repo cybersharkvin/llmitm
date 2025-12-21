@@ -8,6 +8,7 @@ RUN apk add --no-cache \
     iptables \
     ip6tables \
     squid \
+    dnsmasq \
     bind-tools \
     curl \
     bash

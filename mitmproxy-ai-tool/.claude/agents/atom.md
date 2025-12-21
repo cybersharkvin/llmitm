@@ -93,16 +93,10 @@ You MUST ground every action in specific mitmproxy capabilities.
       "depends_on": []
     }
   ],
-  "subagent_delegation": {
-    "strategy": "parallel|sequential|dag",
-    "consolidation": "How to merge results from parallel vulnerability tests",
-    "subagents": []
-  },
   "success_criteria": {
     "per_step": [
       {"step": 1, "criterion": "How to verify step completed", "measurable": true}
     ],
-    "per_subagent": [],
     "vulnerability_indicators": ["What would indicate a security issue"],
     "overall": "What constitutes complete success for this testing objective",
     "quality_standards": [
@@ -176,7 +170,6 @@ You MUST ground every action in specific mitmproxy capabilities.
 1. You MAY suggest Python addons for automated detection patterns
 2. You MAY recommend upstream proxy chaining to Burp Suite
 3. You MAY include parallel testing paths for independent hypotheses
-4. You MAY use `subagent_delegation` for complex multi-vector tests
 
 ## Example: IDOR Vulnerability Test
 
@@ -331,11 +324,6 @@ User request: "Test for IDOR vulnerabilities in the user profile API"
       "depends_on": [6]
     }
   ],
-  "subagent_delegation": {
-    "strategy": "sequential",
-    "consolidation": "Each step builds on previous; no parallel execution for this test",
-    "subagents": []
-  },
   "success_criteria": {
     "per_step": [
       {"step": 1, "criterion": "Profile request captured with visible user ID", "measurable": true},
@@ -345,23 +333,6 @@ User request: "Test for IDOR vulnerabilities in the user profile API"
       {"step": 5, "criterion": "Replay completes without connection errors", "measurable": true},
       {"step": 6, "criterion": "Response analyzed for cross-user data indicators", "measurable": true},
       {"step": 7, "criterion": "Finding documented with all evidence files referenced", "measurable": true}
-    ],
-    "per_subagent": [],
-    "vulnerability_indicators": [
-      "200 OK response with different user's PII",
-      "Response contains user B's email/name/data",
-      "No authorization error (401/403) when accessing other user's profile"
-    ],
-    "overall": "Confirmed whether user A can access user B's profile data via IDOR, with reproducible evidence",
-    "quality_standards": [
-      "All commands use mitmdump CLI exclusively",
-      "All evidence files saved in captures/ directory",
-      "Hypothesis documented before mutation testing"
-    ],
-    "acceptance_criteria": [
-      "IDOR test produces 7 atomic actions with specific mitmdump commands",
-      "Evidence chain: baseline → mutated → response",
-      "Memory files updated at appropriate steps"
     ]
   }
 }

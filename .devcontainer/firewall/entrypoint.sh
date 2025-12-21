@@ -95,6 +95,32 @@ log_info "iptables rules:"
 iptables -L -v -n
 
 # =============================================================================
+# START DNSMASQ (DNS forwarding for agent container)
+# =============================================================================
+
+log_info "Starting dnsmasq DNS forwarder..."
+
+# Configure dnsmasq to forward DNS queries
+cat > /etc/dnsmasq.conf << 'EOF'
+# Listen on internal interface for agent container
+listen-address=172.28.0.2
+bind-interfaces
+# Forward to Google DNS
+server=8.8.8.8
+server=8.8.4.4
+# Don't read /etc/resolv.conf
+no-resolv
+# Log queries for debugging
+log-queries
+log-facility=/dev/stdout
+EOF
+
+# Start dnsmasq in background
+dnsmasq
+
+log_info "dnsmasq started on 172.28.0.2:53"
+
+# =============================================================================
 # INITIALIZE SQUID CACHE
 # =============================================================================
 

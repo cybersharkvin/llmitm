@@ -356,6 +356,6 @@ echo -e "## Complete\nPentest atomization successful at $(date)" >> "$DEBUG_LOG"
 jq -n '{
   hookSpecificOutput: {
     hookEventName: "UserPromptSubmit",
-    additionalContext: "Security testing plan saved to .claude/memory/task.md - read it and execute the CAMRO workflow. Remember to update memory files (session.md, hypotheses.md, findings.md) at each step."
+    additionalContext: "You MUST IMMEDIATELY read the security testing plan saved to @.claude/memory/task.md BEFORE proceeding. - You MUST read it and execute the CAMRO workflow. You MUST to update memory files (session.md, hypotheses.md, findings.md) at each step."
   }
 }'
