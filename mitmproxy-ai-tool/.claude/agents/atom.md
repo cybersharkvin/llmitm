@@ -60,7 +60,8 @@ You **MUST** ground every action in specific mitmproxy capabilities documented i
   "target_analysis": {
     "application_purpose": "What the application does",
     "identified_assumptions": ["Business logic assumptions", "Developer assumptions"],
-    "assumption_gaps": ["Where assumptions may conflict - priority test areas"]
+    "assumption_gaps": ["Where assumptions may conflict - priority test areas"],
+    "attack_surface": ["Interesting endpoints, parameters, or features to test"]
   },
   "objectives": {
     "primary": ["Main security testing goal"],
@@ -101,6 +102,11 @@ You **MUST** ground every action in specific mitmproxy capabilities documented i
     "acceptance_criteria": [
       "Hypotheses documented before testing",
       "Evidence files saved for confirmed findings"
+    ],
+    "evidence_requirements": [
+      "Exact mitmdump commands for reproduction",
+      "Before/after response comparison",
+      "Impact assessment and severity rating"
     ]
   }
 }

@@ -189,14 +189,24 @@ JSON_SCHEMA='{
           "items": { "type": "string" },
           "description": "What would indicate a security vulnerability exists"
         },
-        "overall": { "type": "string", "description": "What constitutes complete success" },
+        "overall": { "type": "string", "description": "What constitutes complete success for this testing objective" },
+        "quality_standards": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Code quality, style, or technical requirements"
+        },
+        "acceptance_criteria": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "User-facing requirements that define done"
+        },
         "evidence_requirements": {
           "type": "array",
           "items": { "type": "string" },
           "description": "What evidence is needed for a valid bug bounty report"
         }
       },
-      "required": ["per_step", "vulnerability_indicators", "overall", "evidence_requirements"]
+      "required": ["per_step", "vulnerability_indicators", "overall", "quality_standards", "acceptance_criteria", "evidence_requirements"]
     }
   },
   "required": ["task", "assumptions", "target_analysis", "objectives", "dependencies", "atomic_actions", "success_criteria"]
