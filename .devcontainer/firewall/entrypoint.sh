@@ -37,10 +37,15 @@ if [ -n "$TARGET_DOMAINS" ]; then
     for domain in "${DOMAINS[@]}"; do
         domain=$(echo "$domain" | xargs)
         if [ -n "$domain" ]; then
-            log_info "  + $domain"
-            # Add domain and wildcard subdomain
-            echo "$domain" >> "$ALLOWLIST_FILE"
-            echo ".$domain" >> "$ALLOWLIST_FILE"
+            # Skip IP addresses - they're handled by iptables, not squid dstdomain
+            if [[ ! "$domain" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+                log_info "  + $domain (domain)"
+                # Add domain and wildcard subdomain
+                echo "$domain" >> "$ALLOWLIST_FILE"
+                echo ".$domain" >> "$ALLOWLIST_FILE"
+            else
+                log_info "  + $domain (IP - handled by iptables)"
+            fi
         fi
     done
 fi
@@ -125,7 +130,14 @@ log_info "dnsmasq started on 172.28.0.2:53"
 # =============================================================================
 
 log_info "Initializing Squid cache..."
-squid -z 2>/dev/null || true
+# Kill any existing squid processes
+pkill -f squid || true
+sleep 1
+# Clean up any stale PID file
+rm -f /var/run/squid.pid /var/run/squid.pid.*
+# Initialize Squid cache without starting it
+squid -z -f /etc/squid/squid.conf 2>/dev/null || true
+sleep 1
 
 # =============================================================================
 # START SQUID PROXY
