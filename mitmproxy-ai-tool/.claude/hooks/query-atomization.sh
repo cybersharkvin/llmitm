@@ -11,7 +11,7 @@
 # Determine paths FIRST before anything else
 PROJECT_DIR="${CLAUDE_PROJECT_DIR:-$(pwd)}"
 DEBUG_LOG="$PROJECT_DIR/.claude/atomDebug.md"
-TASK_FILE="$PROJECT_DIR/.claude/memory/task.md"
+TASK_FILE="$PROJECT_DIR/.claude/memory/task.json"
 
 # ==============================================================================
 # Read Input BEFORE any debug file operations
@@ -300,6 +300,6 @@ fi
 jq -n '{
   hookSpecificOutput: {
     hookEventName: "UserPromptSubmit",
-    additionalContext: "You MUST comply with the following requirements:\n\n1. You MUST read @.claude/memory/task.md IMMEDIATELY before proceeding\n2. You MUST NOT execute your own interpretation of the user request\n3. You MUST follow the atomic_actions array in exact dependency order (see depends_on field)\n4. You MUST NOT skip, reorder, or parallel-execute steps without explicit user approval\n5. You MUST validate each step against its success_criteria before marking complete\n6. You MUST update memory files (session.md, hypotheses.md, findings.md) after each major step\n7. You SHOULD use TodoWrite to track progress through the atomic steps\n8. You MUST NOT stop work until all steps are completed OR the user explicitly stops you\n\nThe task file contains:\n- Objectives (primary and supporting)\n- Dependencies (prerequisites, constraints, sequential/parallel execution)\n- Atomic steps with CAMRO phases (CAPTURE, ANALYZE, MUTATE, REPLAY, OBSERVE)\n- mitmdump commands for each step\n- Per-step validation requirements\n\nFailure to read this file before proceeding violates the task execution contract."
+    additionalContext: "You MUST comply with the following requirements:\n\n1. You MUST read @.claude/memory/task.json IMMEDIATELY before proceeding\n2. You MUST NOT execute your own interpretation of the user request\n3. You MUST follow the atomic_actions array in exact dependency order (see depends_on field)\n4. You MUST NOT skip, reorder, or parallel-execute steps without explicit user approval\n5. You MUST validate each step against its success_criteria before marking complete\n6. You MUST update memory files (session.md, hypotheses.md, findings.md) after each major step\n7. You SHOULD use TodoWrite to track progress through the atomic steps\n8. You MUST NOT stop work until all steps are completed OR the user explicitly stops you\n\nThe task file contains:\n- Objectives (primary and supporting)\n- Dependencies (prerequisites, constraints, sequential/parallel execution)\n- Atomic steps with CAMRO phases (CAPTURE, ANALYZE, MUTATE, REPLAY, OBSERVE)\n- mitmdump commands for each step\n- Per-step validation requirements\n\nFailure to read this file before proceeding violates the task execution contract."
   }
 }'
