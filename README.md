@@ -59,11 +59,38 @@ LLMitM transforms mitmproxy's CLI (`mitmdump`) into an LLM-operated security tes
 ### Prerequisites
 
 - Docker Desktop or Docker Engine
-- VS Code + [Dev Containers](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-containers) extension (for Option 1)
 
 ---
 
-### Option 1: VS Code Devcontainer (Recommended)
+### Option 1: Automated Launch Script (Recommended - One Command)
+
+**Complete setup in a single command:**
+
+```bash
+cd /path/to/llmitm
+./launch.sh
+```
+
+The script will automatically:
+1. Detect or create a Juice Shop container
+2. Extract its IP address
+3. Configure `.env` with the target
+4. Launch firewall + agent containers
+5. Drop you into the agent shell
+
+**That's it!** No manual configuration needed.
+
+```bash
+# From inside the agent container, launch Claude:
+claude --dangerously-skip-permissions
+
+# Type your first prompt:
+# "Test the target for IDOR vulnerabilities"
+```
+
+---
+
+### Option 2: VS Code Devcontainer
 
 **From scratch (includes Juice Shop setup):**
 
@@ -101,7 +128,7 @@ code llmitm
 
 ---
 
-### Option 2: Docker Compose (Standalone)
+### Option 3: Docker Compose (Manual Setup)
 
 **From scratch (includes Juice Shop setup):**
 
