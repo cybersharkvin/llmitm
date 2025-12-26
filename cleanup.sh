@@ -122,19 +122,25 @@ cleanup_containers() {
 cleanup_images() {
     log_header "Removing Images"
 
-    # Remove llmitm agent image
-    if docker images --format '{{.Repository}}:{{.Tag}}' | grep -q "^llmitm-agent:latest$\|^.*llmitm.*:latest$"; then
-        log_info "Removing image: llmitm-agent"
-        docker rmi -f llmitm-agent 2>/dev/null || docker image rm -f llmitm-agent 2>/dev/null || true
-        log_success "Removed llmitm-agent image"
-    fi
+    # Remove any llmitm-related images (agent, firewall, etc.)
+    # Docker-compose may name them with underscore or hyphen depending on context
+    for image_pattern in "llmitm_agent" "llmitm-agent" "llmitm_firewall" "llmitm-firewall" "atomic-firewall" "atomic_firewall"; do
+        if docker images --format '{{.Repository}}' | grep -q "$image_pattern"; then
+            log_info "Removing image: $image_pattern"
+            docker rmi -f "$image_pattern" 2>/dev/null || true
+        fi
+    done
+    log_success "Removed all llmitm images"
+}
 
-    # Remove firewall image
-    if docker images --format '{{.Repository}}:{{.Tag}}' | grep -q ".*firewall.*"; then
-        log_info "Removing firewall image"
-        docker rmi -f atomic-firewall 2>/dev/null || docker image rm -f atomic-firewall 2>/dev/null || true
-        log_success "Removed firewall image"
-    fi
+cleanup_build_cache() {
+    log_header "Clearing Docker Build Cache"
+
+    # Clear the build cache to ensure fresh builds on next launch
+    # This is CRITICAL - without this, docker-compose build will reuse cached layers
+    log_info "Pruning Docker builder cache (this ensures fresh image builds)"
+    docker builder prune -f 2>/dev/null || log_warn "Could not prune builder cache (may require manual cleanup)"
+    log_success "Docker build cache cleared"
 }
 
 cleanup_networks() {
@@ -195,6 +201,7 @@ main() {
         log_warn "This will remove:"
         echo "  - All running containers (llmitm-agent, llmitm-firewall, juice-shop)"
         echo "  - Built Docker images"
+        echo "  - Docker build cache (ensures fresh builds)"
         echo "  - Docker networks (atomic_internal, atomic_external, etc.)"
         if [ "$KEEP_VOLUMES" = false ]; then
             echo "  - Data volumes (llmitm-captures, llmitm-certs)"
@@ -213,6 +220,9 @@ main() {
     echo ""
 
     cleanup_images
+    echo ""
+
+    cleanup_build_cache
     echo ""
 
     cleanup_networks
