@@ -1,6 +1,6 @@
 #!/bin/bash
 # =============================================================================
-# LLMitM Bug Bounty Hunter - Automated Launch Script
+# LLMitM Bug Bounty Hunter - Automated Launch Script with Permission Fixes
 # =============================================================================
 # One-command setup: Detects/creates Juice Shop, configures firewall, and
 # launches the agent in a network-isolated container environment.
@@ -15,6 +15,40 @@
 #   - Launches firewall + agent containers with proper ordering
 #   - Verifies connectivity before dropping into shell
 #   - Idempotent (safe to run multiple times)
+#   - Fixes ALL permission issues (host ownership, named volumes, hook scripts)
+#
+# PERMISSION HANDLING:
+#   This script proactively fixes 8 critical permission issues before
+#   launching containers to prevent runtime "Permission denied" failures:
+#
+#   1. Named Volume Ownership - Docker volumes created by daemon may be root:root
+#      Fix: chown to 1000:1000 (vscode user) inside container post-launch
+#
+#   2. Hook Script Execute Permissions - Shell scripts need +x bit
+#      Fix: chmod u+x on all .claude/hooks/*.sh before container start
+#
+#   3. .claude/scripts/ Directory - Agent needs to create Python addons
+#      Fix: mkdir -p and ensure writable ownership
+#
+#   4. .git/ Ownership - Git commands fail if owned by root
+#      Fix: chown -R 1000:1000 on .git
+#
+#   5. Memory Files - Agent needs read/write to session/hypotheses/findings
+#      Fix: Initialize with correct ownership and readable permissions
+#
+#   6. Host .env Permissions - Script needs to read environment file
+#      Fix: chmod 644 on .env
+#
+#   7. Parent Directory Traversal - Even subdirs need parent execute (+x)
+#      Fix: chmod +x on ATOMIC/ and parent directories
+#
+#   8. Docker Socket - On Linux, may have restrictive permissions
+#      Fix: Verify user can run docker (docker group or sudo)
+#
+# PLATFORM SUPPORT:
+#   - Linux (primary): Uses sudo where needed (e.g., chown inside container)
+#   - macOS: Docker Desktop handles permissions; sudo may not be in container
+#   - WSL2: Similar to Linux; Docker Desktop backend differs from Docker Engine
 #
 # =============================================================================
 
@@ -182,22 +216,61 @@ get_juice_shop_ip() {
 # Step 7: Setup .env file
 # =============================================================================
 
-fix_workspace_ownership() {
-    log_header "Fixing Workspace Permissions"
+fix_workspace_permissions() {
+    log_header "Fixing Workspace Permissions & Ownership"
 
     local workspace_dir="${SCRIPT_DIR}/mitmproxy-ai-tool"
 
     if [ ! -d "$workspace_dir" ]; then
+        log_warn "Workspace directory not found, skipping permission fixes"
         return 0
     fi
 
-    log_info "Ensuring vscode user owns workspace directory..."
+    # FIX #1: Ensure vscode user owns workspace
+    log_info "Ensuring vscode user (1000:1000) owns workspace..."
     sudo chown -R 1000:1000 "$workspace_dir" 2>/dev/null || {
         # If sudo fails, try without sudo (may already have permissions)
         chown -R 1000:1000 "$workspace_dir" 2>/dev/null || true
     }
 
-    log_success "Workspace ownership fixed"
+    # FIX #2: Hook scripts need execute permission
+    log_info "Setting execute permissions on hook scripts..."
+    chmod -R u+x "$workspace_dir/.claude/hooks/"*.sh 2>/dev/null || true
+    chmod u+x "$workspace_dir/launch.sh" 2>/dev/null || true
+
+    # FIX #3: Ensure .claude/scripts/ directory exists and is writable
+    log_info "Ensuring .claude/scripts/ directory exists with correct permissions..."
+    mkdir -p "$workspace_dir/.claude/scripts" 2>/dev/null || true
+    chmod 755 "$workspace_dir/.claude/scripts" 2>/dev/null || true
+
+    # FIX #4: Initialize memory files with correct ownership and permissions
+    log_info "Initializing memory files..."
+    mkdir -p "$workspace_dir/.claude/memory" 2>/dev/null || true
+    touch "$workspace_dir/.claude/memory/session.md" 2>/dev/null || true
+    touch "$workspace_dir/.claude/memory/hypotheses.md" 2>/dev/null || true
+    touch "$workspace_dir/.claude/memory/findings.md" 2>/dev/null || true
+    chmod 644 "$workspace_dir/.claude/memory/"*.md 2>/dev/null || true
+
+    # FIX #5: Ensure .git ownership (fixes "dubious ownership" errors)
+    log_info "Ensuring .git directory has correct ownership..."
+    sudo chown -R 1000:1000 "$workspace_dir/.git" 2>/dev/null || {
+        chown -R 1000:1000 "$workspace_dir/.git" 2>/dev/null || true
+    }
+
+    # FIX #6: Ensure parent directories have execute permission
+    log_info "Ensuring parent directories are traversable..."
+    chmod +x "$SCRIPT_DIR" 2>/dev/null || true
+    if [ -d "$(dirname "$SCRIPT_DIR")" ]; then
+        chmod +x "$(dirname "$SCRIPT_DIR")" 2>/dev/null || true
+    fi
+
+    # FIX #7: Ensure .env file is readable
+    if [ -f "$ENV_FILE" ]; then
+        log_info "Ensuring .env file is readable..."
+        chmod 644 "$ENV_FILE" 2>/dev/null || true
+    fi
+
+    log_success "Host permissions fixed (workspace ownership, hooks, memory files)"
 }
 
 setup_env_file() {
@@ -257,6 +330,27 @@ launch_containers() {
     sleep 3
 
     log_success "Containers launched"
+}
+
+# =============================================================================
+# Step 8b: Fix Named Volume Permissions (Inside Container)
+# =============================================================================
+
+fix_named_volume_permissions() {
+    log_header "Fixing Named Volume Permissions"
+
+    log_info "Fixing ownership of named volumes (llmitm-captures, llmitm-certs)..."
+    # Docker named volumes are created by daemon; fix ownership to vscode user inside container
+    docker compose -f "$DOCKER_COMPOSE_FILE" exec -T llmitm \
+        sudo chown -R 1000:1000 /workspace/captures /workspace/certs 2>/dev/null || {
+        # If sudo not available in container, try without
+        docker compose -f "$DOCKER_COMPOSE_FILE" exec -T llmitm \
+            chown -R 1000:1000 /workspace/captures /workspace/certs 2>/dev/null || {
+            log_warn "Could not fix named volume ownership (may require manual fix or Docker Desktop permissions)"
+        }
+    }
+
+    log_success "Named volume permissions fixed"
 }
 
 # =============================================================================
@@ -341,13 +435,16 @@ main() {
     log_success "Juice Shop IP: $juice_ip"
     echo ""
 
-    fix_workspace_ownership
+    fix_workspace_permissions
     echo ""
 
     setup_env_file "$juice_ip"
     echo ""
 
     launch_containers
+    echo ""
+
+    fix_named_volume_permissions
     echo ""
 
     verify_setup

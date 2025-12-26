@@ -45,6 +45,15 @@ RUN pip3 install --no-cache-dir mitmproxy
 # Set shell to zsh
 RUN chsh -s /bin/zsh vscode
 
+# Ensure workspace directories exist with vscode ownership
+# This prevents permission issues when mounting host volumes
+RUN mkdir -p /workspace/.claude/memory \
+    && mkdir -p /workspace/.claude/scripts \
+    && mkdir -p /workspace/.claude/agents \
+    && mkdir -p /workspace/captures \
+    && mkdir -p /workspace/certs \
+    && chown -R vscode:vscode /workspace
+
 # Switch to non-root user (vscode user is created by base image)
 # Required for Claude Code --dangerously-skip-permissions flag (Claude Code 2.0.70+ forbids this with root)
 USER vscode
