@@ -133,16 +133,6 @@ cleanup_images() {
     log_success "Removed all llmitm images"
 }
 
-cleanup_build_cache() {
-    log_header "Clearing Docker Build Cache"
-
-    # Clear the build cache to ensure fresh builds on next launch
-    # This is CRITICAL - without this, docker-compose build will reuse cached layers
-    log_info "Pruning Docker builder cache (this ensures fresh image builds)"
-    docker builder prune -f 2>/dev/null || log_warn "Could not prune builder cache (may require manual cleanup)"
-    log_success "Docker build cache cleared"
-}
-
 cleanup_networks() {
     log_header "Removing Networks"
 
@@ -201,7 +191,6 @@ main() {
         log_warn "This will remove:"
         echo "  - All running containers (llmitm-agent, llmitm-firewall, juice-shop)"
         echo "  - Built Docker images"
-        echo "  - Docker build cache (ensures fresh builds)"
         echo "  - Docker networks (atomic_internal, atomic_external, etc.)"
         if [ "$KEEP_VOLUMES" = false ]; then
             echo "  - Data volumes (llmitm-captures, llmitm-certs)"
@@ -220,9 +209,6 @@ main() {
     echo ""
 
     cleanup_images
-    echo ""
-
-    cleanup_build_cache
     echo ""
 
     cleanup_networks

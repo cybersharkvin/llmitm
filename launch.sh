@@ -317,6 +317,9 @@ setup_env_file() {
 launch_containers() {
     log_header "Launching Containers"
 
+    log_info "Building container images (ensures fresh builds with latest Dockerfile changes)..."
+    docker compose -f "$DOCKER_COMPOSE_FILE" build --no-cache 2>&1 | tail -5 || true
+
     log_info "Starting firewall container (may take 5-10 seconds)..."
     docker compose -f "$DOCKER_COMPOSE_FILE" up -d firewall 2>&1 | grep -v "Already in use" || true
 
