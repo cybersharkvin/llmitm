@@ -45,6 +45,10 @@ RUN pip3 install --no-cache-dir mitmproxy
 # Set shell to zsh
 RUN chsh -s /bin/zsh vscode
 
+# Ensure home directory is writable by vscode user
+# Claude Code needs to create ~/.claude/todos, ~/.claude/debug, etc.
+RUN chown -R vscode:vscode /home/vscode && chmod 755 /home/vscode
+
 # Ensure workspace directories exist with vscode ownership
 # This prevents permission issues when mounting host volumes
 RUN mkdir -p /workspace/.claude/memory \
