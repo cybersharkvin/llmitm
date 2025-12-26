@@ -341,10 +341,10 @@ fix_named_volume_permissions() {
 
     log_info "Fixing ownership of named volumes (llmitm-captures, llmitm-certs)..."
     # Docker named volumes are created by daemon; fix ownership to vscode user inside container
-    docker compose -f "$DOCKER_COMPOSE_FILE" exec -T llmitm \
+    docker compose -f "$DOCKER_COMPOSE_FILE" exec -T -w /workspace llmitm \
         sudo chown -R 1000:1000 /workspace/captures /workspace/certs 2>/dev/null || {
         # If sudo not available in container, try without
-        docker compose -f "$DOCKER_COMPOSE_FILE" exec -T llmitm \
+        docker compose -f "$DOCKER_COMPOSE_FILE" exec -T -w /workspace llmitm \
             chown -R 1000:1000 /workspace/captures /workspace/certs 2>/dev/null || {
             log_warn "Could not fix named volume ownership (may require manual fix or Docker Desktop permissions)"
         }
@@ -373,7 +373,7 @@ verify_setup() {
 
     # Test proxy connectivity from agent
     log_info "Testing proxy connectivity..."
-    if docker compose -f "$DOCKER_COMPOSE_FILE" exec -T llmitm curl -s --connect-timeout 5 https://api.anthropic.com > /dev/null 2>&1; then
+    if docker compose -f "$DOCKER_COMPOSE_FILE" exec -T -w /workspace llmitm curl -s --connect-timeout 5 https://api.anthropic.com > /dev/null 2>&1; then
         log_success "Agent can reach Claude API through proxy"
     else
         log_warn "Could not verify Claude API connectivity (may be firewall issue)"
@@ -397,8 +397,9 @@ drop_into_shell() {
     log_info "Run Claude: claude --dangerously-skip-permissions --agent llmitm"
     echo ""
 
-    # Use -f flag to specify compose file path, avoiding cwd issues with container mounts
-    exec docker compose -f "$DOCKER_COMPOSE_FILE" exec llmitm bash
+    # Use -f flag to specify compose file path, and -w to set working directory
+    # (-w /workspace prevents "current working directory outside container mount" errors)
+    exec docker compose -f "$DOCKER_COMPOSE_FILE" exec -w /workspace llmitm bash
 }
 
 # =============================================================================
