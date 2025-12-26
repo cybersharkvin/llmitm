@@ -42,6 +42,8 @@ services:
     container_name: llmitm-agent
     depends_on:
       - firewall
+    # Run as non-root user (required for Claude Code --dangerously-skip-permissions)
+    user: "1000:1000"
     # NO capabilities - agent cannot modify network
     cap_drop:
       - ALL

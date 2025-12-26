@@ -82,7 +82,7 @@ The script will automatically:
 
 ```bash
 # From inside the agent container, launch Claude:
-claude --dangerously-skip-permissions
+claude --dangerously-skip-permissions --agent llmitm
 
 # Type your first prompt:
 # "Test the target for IDOR vulnerabilities"

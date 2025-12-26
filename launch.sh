@@ -79,11 +79,11 @@ check_prerequisites() {
     fi
     log_success "Docker found: $(docker --version)"
 
-    # Check docker-compose
-    if ! command -v docker-compose &> /dev/null; then
-        exit_error "docker-compose is not installed. Please install it first."
+    # Check docker compose plugin
+    if ! docker compose version &> /dev/null; then
+        exit_error "docker compose plugin is not installed. Please install it first."
     fi
-    log_success "docker-compose found: $(docker-compose --version)"
+    log_success "docker compose found: $(docker compose version)"
 
     # Verify we're in the right directory
     if [ ! -f "$DOCKER_COMPOSE_FILE" ]; then
@@ -229,13 +229,13 @@ launch_containers() {
     cd "$SCRIPT_DIR"
 
     log_info "Starting firewall container (may take 5-10 seconds)..."
-    docker-compose up -d firewall 2>&1 | grep -v "Already in use" || true
+    docker compose up -d firewall 2>&1 | grep -v "Already in use" || true
 
     log_info "Waiting for firewall to initialize..."
     sleep 3
 
     log_info "Starting agent container..."
-    docker-compose up -d llmitm 2>&1 | grep -v "Already in use" || true
+    docker compose up -d llmitm 2>&1 | grep -v "Already in use" || true
 
     log_info "Waiting for agent container to be ready..."
     sleep 3
@@ -263,7 +263,7 @@ verify_setup() {
 
     # Test proxy connectivity from agent
     log_info "Testing proxy connectivity..."
-    if docker-compose exec -T llmitm curl -s --connect-timeout 5 https://api.anthropic.com > /dev/null 2>&1; then
+    if docker compose exec -T llmitm curl -s --connect-timeout 5 https://api.anthropic.com > /dev/null 2>&1; then
         log_success "Agent can reach Claude API through proxy"
     else
         log_warn "Could not verify Claude API connectivity (may be firewall issue)"
@@ -284,10 +284,11 @@ drop_into_shell() {
     log_info "Type 'exit' to leave the container"
     log_info "Memory files: @.claude/memory/session.md, hypotheses.md, findings.md"
     log_info "Cheatsheet: @mitmdump-cheatsheet.md, @CLAUDE.md"
+    log_info "Run Claude: claude --dangerously-skip-permissions --agent llmitm"
     echo ""
 
     cd "$SCRIPT_DIR"
-    exec docker-compose exec llmitm bash
+    exec docker compose exec llmitm bash
 }
 
 # =============================================================================

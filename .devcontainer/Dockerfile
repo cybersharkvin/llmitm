@@ -42,16 +42,18 @@ RUN npm install -g @anthropic-ai/claude-code
 # Install mitmproxy via pip (latest stable)
 RUN pip3 install --no-cache-dir mitmproxy
 
-# Create directories
-RUN mkdir -p /home/vscode/captures \
-             /home/vscode/certs \
-             /home/vscode/.claude
-
 # Set shell to zsh
 RUN chsh -s /bin/zsh vscode
 
+# Switch to non-root user (vscode user is created by base image)
+# Required for Claude Code --dangerously-skip-permissions flag (Claude Code 2.0.70+ forbids this with root)
+USER vscode
+
 # Working directory
 WORKDIR /workspace
+
+# Note: Let Claude Code create ~/.claude/ on first run with correct permissions
+# Project's .claude/ is mounted at /workspace/.claude/ from mitmproxy-ai-tool/
 
 # Default command
 CMD ["sleep", "infinity"]
