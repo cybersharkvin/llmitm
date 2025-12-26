@@ -226,16 +226,14 @@ setup_env_file() {
 launch_containers() {
     log_header "Launching Containers"
 
-    cd "$SCRIPT_DIR"
-
     log_info "Starting firewall container (may take 5-10 seconds)..."
-    docker compose up -d firewall 2>&1 | grep -v "Already in use" || true
+    docker compose -f "$DOCKER_COMPOSE_FILE" up -d firewall 2>&1 | grep -v "Already in use" || true
 
     log_info "Waiting for firewall to initialize..."
     sleep 3
 
     log_info "Starting agent container..."
-    docker compose up -d llmitm 2>&1 | grep -v "Already in use" || true
+    docker compose -f "$DOCKER_COMPOSE_FILE" up -d llmitm 2>&1 | grep -v "Already in use" || true
 
     log_info "Waiting for agent container to be ready..."
     sleep 3
@@ -263,7 +261,7 @@ verify_setup() {
 
     # Test proxy connectivity from agent
     log_info "Testing proxy connectivity..."
-    if docker compose exec -T llmitm curl -s --connect-timeout 5 https://api.anthropic.com > /dev/null 2>&1; then
+    if docker compose -f "$DOCKER_COMPOSE_FILE" exec -T llmitm curl -s --connect-timeout 5 https://api.anthropic.com > /dev/null 2>&1; then
         log_success "Agent can reach Claude API through proxy"
     else
         log_warn "Could not verify Claude API connectivity (may be firewall issue)"
@@ -287,8 +285,8 @@ drop_into_shell() {
     log_info "Run Claude: claude --dangerously-skip-permissions --agent llmitm"
     echo ""
 
-    cd "$SCRIPT_DIR"
-    exec docker compose exec llmitm bash
+    # Use -f flag to specify compose file path, avoiding cwd issues with container mounts
+    exec docker compose -f "$DOCKER_COMPOSE_FILE" exec llmitm bash
 }
 
 # =============================================================================
