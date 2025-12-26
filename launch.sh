@@ -182,6 +182,24 @@ get_juice_shop_ip() {
 # Step 7: Setup .env file
 # =============================================================================
 
+fix_workspace_ownership() {
+    log_header "Fixing Workspace Permissions"
+
+    local workspace_dir="${SCRIPT_DIR}/mitmproxy-ai-tool"
+
+    if [ ! -d "$workspace_dir" ]; then
+        return 0
+    fi
+
+    log_info "Ensuring vscode user owns workspace directory..."
+    sudo chown -R 1000:1000 "$workspace_dir" 2>/dev/null || {
+        # If sudo fails, try without sudo (may already have permissions)
+        chown -R 1000:1000 "$workspace_dir" 2>/dev/null || true
+    }
+
+    log_success "Workspace ownership fixed"
+}
+
 setup_env_file() {
     local juice_shop_ip=$1
 
@@ -321,6 +339,9 @@ main() {
     log_header "Extracting Juice Shop IP"
     local juice_ip=$(get_juice_shop_ip)
     log_success "Juice Shop IP: $juice_ip"
+    echo ""
+
+    fix_workspace_ownership
     echo ""
 
     setup_env_file "$juice_ip"
