@@ -45,9 +45,14 @@ RUN pip3 install --no-cache-dir mitmproxy
 # Set shell to zsh
 RUN chsh -s /bin/zsh vscode
 
-# Ensure home directory is writable by vscode user
-# Claude Code needs to create ~/.claude/todos, ~/.claude/debug, etc.
-RUN chown -R vscode:vscode /home/vscode && chmod 755 /home/vscode
+# Pre-create Claude Code directories BEFORE switching to vscode user
+# This prevents "mkdir: permission denied" when Claude Code starts
+RUN mkdir -p /home/vscode/.claude/todos \
+    && mkdir -p /home/vscode/.claude/debug \
+    && mkdir -p /home/vscode/.claude/templates \
+    && mkdir -p /home/vscode/.config \
+    && chown -R vscode:vscode /home/vscode \
+    && chmod 755 /home/vscode
 
 # Ensure workspace directories exist with vscode ownership
 # This prevents permission issues when mounting host volumes
