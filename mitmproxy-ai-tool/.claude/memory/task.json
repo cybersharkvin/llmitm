@@ -1,49 +1,98 @@
 {
-  "task": "Test user profile API for Insecure Direct Object Reference vulnerabilities",
+  "task": "Initial security testing engagement against OWASP Juice Shop container - reconnaissance, traffic capture, and vulnerability hypothesis generation",
   "assumptions": [
-    "Target application uses numeric or predictable user IDs in profile endpoints",
-    "Authorization may rely on session token without verifying resource ownership",
-    "Profile endpoint returns user-specific PII that would confirm unauthorized access"
+    "Juice Shop is running on localhost:3000 (standard OWASP port)",
+    "Target is within authorized scope for security testing",
+    "Application uses standard web authentication (likely JWT or session cookies)",
+    "API endpoints follow REST conventions under /api paths",
+    "Juice Shop contains intentional OWASP vulnerabilities for testing",
+    "HTTPS may not be properly configured (self-signed cert likely)",
+    "Multiple user roles exist (customer, admin, etc.)",
+    "Database backend stores user profiles, products, orders",
+    "File upload, search, and cart functionality present"
   ],
   "target_analysis": {
-    "application_purpose": "User profile management - view and edit personal data",
+    "application_purpose": "OWASP Juice Shop is a deliberately vulnerable web application designed to teach security testing. It's an e-commerce platform with user accounts, shopping cart, product browsing, reviews, and admin functions.",
     "identified_assumptions": [
-      "Business: Users should only access their own profile data",
-      "Developer: User ID in request matches authenticated session"
+      "Business: Users should only access their own orders and profile data",
+      "Business: Product prices should not be modifiable by users",
+      "Business: Admin panel should be restricted to administrators only",
+      "Developer: Authentication tokens identify users and grant access",
+      "Developer: User IDs in URLs/requests correspond to owned resources",
+      "Developer: Role-based access control prevents privilege escalation",
+      "Developer: File uploads are validated and stored securely",
+      "Developer: Search queries don't expose sensitive data"
     ],
     "assumption_gaps": [
-      "Gap: Server may not verify user ID ownership against session token",
-      "Gap: Numeric IDs may be enumerable without rate limiting"
+      "Gap: Whether authentication tokens are actually validated on every request",
+      "Gap: Whether user ID parameters are verified to match authenticated user",
+      "Gap: Whether admin endpoints check role before processing requests",
+      "Gap: Whether file uploads have proper extension/content validation",
+      "Gap: Whether search functionality filters results based on user permissions",
+      "Gap: Whether direct object references (IDs) in API responses are protected",
+      "Gap: Whether price fields can be modified client-side before submission",
+      "Gap: Whether API endpoints require authentication or rely on frontend enforcement"
+    ],
+    "attack_surface": [
+      "/api/users/* - User profile and account endpoints",
+      "/api/products/* - Product listing and detail endpoints",
+      "/api/orders/* - Order history and checkout",
+      "/api/reviews/* - Product reviews and ratings",
+      "/api/basket/* - Shopping cart manipulation",
+      "/admin/* - Administration panel endpoints",
+      "/api/auth/login - Authentication endpoint",
+      "/api/auth/register - User registration",
+      "File upload endpoints - Profile pictures, receipts, etc.",
+      "Search functionality - Query parameter injection points",
+      "JWT/Session tokens - In Authorization headers and cookies"
     ]
   },
   "objectives": {
     "primary": [
-      "Determine if user A can access user B's profile data",
-      "Document authorization bypass with reproducible evidence"
+      "Establish baseline traffic capture from Juice Shop",
+      "Map all accessible endpoints and authentication requirements",
+      "Identify user-specific resource endpoints vulnerable to IDOR",
+      "Detect authorization bypass opportunities (privilege escalation)",
+      "Find sensitive data exposure in API responses",
+      "Document vulnerability hypotheses for systematic testing"
     ],
     "supporting": [
-      "Identify if user IDs are predictable/enumerable",
-      "Map all profile-related endpoints"
+      "Verify proxy configuration and HTTPS interception capability",
+      "Confirm session/token-based authentication mechanism",
+      "Identify data structures and ID patterns (numeric, UUID, etc.)",
+      "Classify endpoints by permission level (public, user, admin)",
+      "Map data flow from user input to backend processing",
+      "Establish evidence collection baseline for reproducible testing"
     ]
   },
   "dependencies": {
     "prerequisites": [
-      "Authenticated session captured for at least one user",
-      "At least 2 test user accounts available",
-      "Target scope confirmed and authorized"
+      "Juice Shop container running and accessible at localhost:3000",
+      "Proxy network interface configured (may require --ignore-hosts adjustment)",
+      "SSL/TLS certificate authority installed for HTTPS interception",
+      "Initial user account created for authenticated traffic capture",
+      "Authorization confirmed for penetration testing this target"
     ],
     "constraints": [
-      "Must use mitmdump CLI only",
-      "Must stay within authorized scope",
-      "Must not modify production data"
+      "MUST use mitmdump CLI exclusively - no mitmproxy interactive or mitmweb",
+      "MUST capture traffic only from target domain/localhost:3000",
+      "MUST not permanently modify application state (read-only testing preferred)",
+      "MUST document all actions for reproducibility",
+      "MUST follow responsible disclosure practices"
     ],
     "sequential": [
-      "Capture baseline before mutation",
-      "Mutate before replay",
-      "Observe before documenting"
+      "Verify proxy connectivity to Juice Shop",
+      "Capture baseline unauthenticated traffic (public pages)",
+      "Create test user account through authenticated channel",
+      "Capture authenticated user traffic patterns",
+      "Analyze captured flows before mutation testing",
+      "Update session.md with discovered endpoints and tokens",
+      "Formulate hypotheses in hypotheses.md before testing"
     ],
     "parallel": [
-      "Can test multiple endpoints simultaneously after capture"
+      "Can test multiple endpoints simultaneously in later phases",
+      "Can analyze different endpoint categories during ANALYZE phase",
+      "Can test multiple user roles in parallel after capturing distinct sessions"
     ]
   },
   "atomic_actions": [
@@ -51,132 +100,292 @@
       "step": 1,
       "phase": "CAPTURE",
       "type": "task",
-      "action": "Capture authenticated profile request for user A",
-      "hypothesis": null,
-      "input": "Browser session with user A logged in",
-      "output": "Baseline traffic file with profile request",
-      "mitmdump_command": "mitmdump -w captures/profile-baseline.mitm \"~d api.target.com & ~u /profile\"",
-      "python_addon": null,
-      "file": "captures/profile-baseline.mitm",
+      "action": "Verify proxy connectivity and capture unauthenticated baseline traffic from Juice Shop",
+      "hypothesis": "",
+      "input": "Juice Shop running at localhost:3000",
+      "output": "Baseline traffic file showing public endpoints and authentication mechanisms",
+      "mitmdump_command": "mitmdump -w captures/juice-baseline-unauthenticated.mitm -p 8080 --anticomp --anticache --flow-detail 2 2>&1 | tee logs/step1-baseline.log &",
+      "python_addon": "",
+      "file": "captures/juice-baseline-unauthenticated.mitm",
       "memory_update": "session",
       "depends_on": []
     },
     {
       "step": 2,
-      "phase": "ANALYZE",
+      "phase": "CAPTURE",
       "type": "task",
-      "action": "Identify user ID parameter in profile requests",
-      "hypothesis": null,
-      "input": "captures/profile-baseline.mitm",
-      "output": "Understanding of how user ID is transmitted (path, query, body, header)",
-      "mitmdump_command": "mitmdump -nr captures/profile-baseline.mitm --flow-detail 3 \"~u /profile\"",
-      "python_addon": null,
-      "file": null,
-      "memory_update": null,
-      "depends_on": [1]
+      "action": "Access Juice Shop homepage and login endpoint through proxy to capture navigation flow",
+      "hypothesis": "",
+      "input": "Proxy running from step 1, browser traffic routed to localhost:8080",
+      "output": "Captured requests showing homepage, login form, authentication form structure",
+      "mitmdump_command": "curl -x http://localhost:8080 -k http://localhost:3000/ 2>&1 | head -50 && curl -x http://localhost:8080 -k http://localhost:3000/login 2>&1 | head -50",
+      "python_addon": "",
+      "file": "captures/baseline-homepage.txt",
+      "memory_update": "session",
+      "depends_on": [
+        1
+      ]
     },
     {
       "step": 3,
       "phase": "ANALYZE",
-      "type": "checkpoint",
-      "action": "Document IDOR hypothesis in hypotheses.md before testing",
-      "hypothesis": "User A can access user B's profile by changing user_id parameter",
-      "input": "Analysis from step 2",
-      "output": "Documented hypothesis with planned test commands",
-      "mitmdump_command": null,
-      "python_addon": null,
-      "file": ".claude/memory/hypotheses.md",
-      "memory_update": "hypotheses",
-      "depends_on": [2]
+      "type": "task",
+      "action": "Analyze baseline traffic to identify authentication endpoints and response patterns",
+      "hypothesis": "",
+      "input": "captures/juice-baseline-unauthenticated.mitm",
+      "output": "Documentation of login endpoints, API structure, response content-type",
+      "mitmdump_command": "mitmdump -nr captures/juice-baseline-unauthenticated.mitm --flow-detail 3 \"~u /login | ~u /api/auth\" 2>&1 | tee logs/step3-auth-analysis.log",
+      "python_addon": "",
+      "file": "logs/step3-auth-analysis.log",
+      "memory_update": "session",
+      "depends_on": [
+        1
+      ]
     },
     {
       "step": 4,
-      "phase": "MUTATE",
+      "phase": "CAPTURE",
       "type": "task",
-      "action": "Replace user A's ID with user B's ID in captured request",
-      "hypothesis": "Server does not verify user ID ownership",
-      "input": "captures/profile-baseline.mitm, user B's ID",
-      "output": "Mutated request file targeting user B's data",
-      "mitmdump_command": "mitmdump -nr captures/profile-baseline.mitm -B \"/~q/user_id=123/user_id=456\" -w captures/idor-test.mitm",
-      "python_addon": null,
-      "file": "captures/idor-test.mitm",
-      "memory_update": null,
-      "depends_on": [3]
+      "action": "Simulate user login to capture authenticated session with JWT/cookie",
+      "hypothesis": "",
+      "input": "Juice Shop login endpoint, test credentials (admin@juice-sh.op/admin123)",
+      "output": "Session file containing authentication token or session cookie",
+      "mitmdump_command": "curl -x http://localhost:8080 -k -X POST http://localhost:3000/api/users/login -H 'Content-Type: application/json' -d '{\"email\":\"admin@juice-sh.op\",\"password\":\"admin123\"}' 2>&1 | tee logs/step4-login-attempt.log",
+      "python_addon": "",
+      "file": "logs/step4-login-attempt.log",
+      "memory_update": "session",
+      "depends_on": [
+        1
+      ]
     },
     {
       "step": 5,
-      "phase": "REPLAY",
+      "phase": "CAPTURE",
       "type": "task",
-      "action": "Replay mutated request with user A's session token",
-      "hypothesis": "Server does not verify user ID ownership",
-      "input": "captures/idor-test.mitm",
-      "output": "Server response to cross-user request",
-      "mitmdump_command": "mitmdump -C captures/idor-test.mitm -w captures/idor-response.mitm --flow-detail 3",
-      "python_addon": null,
-      "file": "captures/idor-response.mitm",
-      "memory_update": null,
-      "depends_on": [4]
+      "action": "Capture authenticated user traffic - access profile, orders, and user-specific endpoints",
+      "hypothesis": "",
+      "input": "Valid authentication token/session from step 4",
+      "output": "Authenticated traffic showing user-specific endpoints and data structures",
+      "mitmdump_command": "mitmdump -w captures/juice-authenticated-user.mitm -p 8080 --anticomp --anticache --flow-detail 2 2>&1 | tee logs/step5-auth-capture.log &",
+      "python_addon": "",
+      "file": "captures/juice-authenticated-user.mitm",
+      "memory_update": "session",
+      "depends_on": [
+        4
+      ]
     },
     {
       "step": 6,
-      "phase": "OBSERVE",
-      "type": "decision_point",
-      "action": "Analyze response - check if user B's data was returned",
-      "hypothesis": "Server does not verify user ID ownership",
-      "input": "captures/idor-response.mitm",
-      "output": "Determination: IDOR confirmed or disproved",
-      "mitmdump_command": "mitmdump -nr captures/idor-response.mitm --flow-detail 4 \"~bs email|name|address\"",
-      "python_addon": null,
-      "file": null,
-      "memory_update": "hypotheses",
-      "depends_on": [5]
+      "phase": "CAPTURE",
+      "type": "task",
+      "action": "Browse authenticated endpoints - profile, orders, basket, account settings through proxy",
+      "hypothesis": "",
+      "input": "Running proxy from step 5, authenticated session from step 4",
+      "output": "Captured authenticated API calls with user IDs, order IDs, resource references",
+      "mitmdump_command": "curl -x http://localhost:8080 -k -H 'Authorization: Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9' http://localhost:3000/api/users/me 2>&1 && curl -x http://localhost:8080 -k -H 'Authorization: Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9' http://localhost:3000/api/orders 2>&1",
+      "python_addon": "",
+      "file": "logs/step6-auth-endpoints.log",
+      "memory_update": "session",
+      "depends_on": [
+        5
+      ]
     },
     {
       "step": 7,
+      "phase": "ANALYZE",
+      "type": "task",
+      "action": "Identify all endpoints, parameters, and ID formats from authenticated capture",
+      "hypothesis": "",
+      "input": "captures/juice-authenticated-user.mitm",
+      "output": "Comprehensive endpoint list with parameter types, ID formats, response structures",
+      "mitmdump_command": "mitmdump -nr captures/juice-authenticated-user.mitm --flow-detail 3 2>&1 | grep -E '(GET|POST|PUT|DELETE)' | tee logs/step7-endpoint-map.log",
+      "python_addon": "",
+      "file": "logs/step7-endpoint-map.log",
+      "memory_update": "session",
+      "depends_on": [
+        5
+      ]
+    },
+    {
+      "step": 8,
+      "phase": "ANALYZE",
+      "type": "task",
+      "action": "Search for sensitive data exposure in responses - tokens, passwords, emails, IDs",
+      "hypothesis": "",
+      "input": "captures/juice-authenticated-user.mitm",
+      "output": "Identified sensitive data patterns and exposure points",
+      "mitmdump_command": "mitmdump -nr captures/juice-authenticated-user.mitm --flow-detail 4 \"~bs password|token|email|id|secret|api|key\" 2>&1 | tee logs/step8-sensitive-data.log",
+      "python_addon": "",
+      "file": "logs/step8-sensitive-data.log",
+      "memory_update": "session",
+      "depends_on": [
+        5
+      ]
+    },
+    {
+      "step": 9,
+      "phase": "ANALYZE",
+      "type": "task",
+      "action": "Identify direct object references - numeric IDs, UUIDs, predictable patterns",
+      "hypothesis": "",
+      "input": "captures/juice-authenticated-user.mitm and step 7 endpoint list",
+      "output": "List of endpoints using object references with enumeration potential",
+      "mitmdump_command": "mitmdump -nr captures/juice-authenticated-user.mitm --flow-detail 3 \"~u /api\" 2>&1 | grep -oE '/(\\d+|[a-f0-9-]{36})' | sort | uniq -c | tee logs/step9-object-references.log",
+      "python_addon": "",
+      "file": "logs/step9-object-references.log",
+      "memory_update": "session",
+      "depends_on": [
+        5
+      ]
+    },
+    {
+      "step": 10,
+      "phase": "ANALYZE",
+      "type": "checkpoint",
+      "action": "Verify proxy capture success and analyze error/success patterns before hypothesis generation",
+      "hypothesis": "",
+      "input": "All captured files from steps 1-9",
+      "output": "Assessment of capture quality and identified testing opportunities",
+      "mitmdump_command": "mitmdump -nr captures/juice-baseline-unauthenticated.mitm --flow-detail 1 2>&1 | tail -10 && echo '---AUTHENTICATED---' && mitmdump -nr captures/juice-authenticated-user.mitm --flow-detail 1 2>&1 | tail -10",
+      "python_addon": "",
+      "file": "logs/step10-capture-verification.log",
+      "memory_update": "session",
+      "depends_on": [
+        7,
+        8,
+        9
+      ]
+    },
+    {
+      "step": 11,
       "phase": "OBSERVE",
       "type": "task",
-      "action": "Document confirmed finding with reproducible evidence",
-      "hypothesis": null,
-      "input": "All .mitm files from test, analysis from step 6",
-      "output": "Vulnerability report in findings.md with severity, reproduction steps, impact",
-      "mitmdump_command": null,
-      "python_addon": null,
-      "file": ".claude/memory/findings.md",
-      "memory_update": "findings",
-      "depends_on": [6]
+      "action": "Generate comprehensive hypothesis list based on captured data and assumption gaps",
+      "hypothesis": "",
+      "input": "Analysis from steps 3-10 and identified assumption gaps",
+      "output": "Documented hypotheses ready for testing in MUTATE/REPLAY phases",
+      "mitmdump_command": "",
+      "python_addon": "hypotheses = [\n    'IDOR_USER_PROFILE: User can access /api/users/{id} with different ID',\n    'IDOR_ORDERS: User can view other users orders via /api/orders/{id}',\n    'PRICE_MANIPULATION: Client-side price can be modified before checkout',\n    'PRIVILEGE_ESCALATION: Non-admin user can access /api/admin/* endpoints',\n    'JWT_VALIDATION: Expired or malformed JWT tokens accepted by API',\n    'REVIEW_IDOR: User can modify/delete other users reviews',\n    'AUTH_BYPASS_HEADER: Authentication can be bypassed with custom headers',\n    'FILE_UPLOAD_RCE: Unrestricted file upload allows code execution'\n]\nfor h in hypotheses:\n    print(f'[HYPOTHESIS] {h}')",
+      "file": ".claude/memory/hypotheses.md",
+      "memory_update": "hypotheses",
+      "depends_on": [
+        10
+      ]
+    },
+    {
+      "step": 12,
+      "phase": "OBSERVE",
+      "type": "task",
+      "action": "Update session.md with target details, captured files, and endpoints discovered",
+      "hypothesis": "",
+      "input": "All analysis from steps 1-11",
+      "output": "Session state documentation for next hunt phases",
+      "mitmdump_command": "",
+      "python_addon": "session_info = '''# OWASP Juice Shop - Hunt Session\n\n## Target\n- URL: http://localhost:3000\n- Application: OWASP Juice Shop (Deliberate Vulnerability Training)\n- Proxy: localhost:8080 (mitmdump)\n\n## Captured Files\n- Baseline (unauthenticated): captures/juice-baseline-unauthenticated.mitm\n- Authenticated (user session): captures/juice-authenticated-user.mitm\n\n## Key Findings\n- Endpoint map: logs/step7-endpoint-map.log\n- Sensitive data: logs/step8-sensitive-data.log  \n- Object references: logs/step9-object-references.log\n- Auth endpoints: logs/step3-auth-analysis.log\n\n## Next Phase\n- Review hypotheses.md for planned tests\n- Prepare MUTATE phase with object ID replacement\n- Plan REPLAY phase for cross-user access tests\n'''\nprint(session_info)",
+      "file": ".claude/memory/session.md",
+      "memory_update": "session",
+      "depends_on": [
+        11
+      ]
     }
   ],
-  "subagent_delegation": {
-    "strategy": "sequential",
-    "consolidation": "Each step builds on previous; no parallel execution for this test",
-    "subagents": []
-  },
   "success_criteria": {
     "per_step": [
-      {"step": 1, "criterion": "Profile request captured with visible user ID", "measurable": true},
-      {"step": 2, "criterion": "User ID parameter location identified", "measurable": true},
-      {"step": 3, "criterion": "Hypothesis documented with planned commands", "measurable": true},
-      {"step": 4, "criterion": "Mutated file contains altered user ID", "measurable": true},
-      {"step": 5, "criterion": "Replay completes without connection errors", "measurable": true},
-      {"step": 6, "criterion": "Response analyzed for cross-user data indicators", "measurable": true},
-      {"step": 7, "criterion": "Finding documented with all evidence files referenced", "measurable": true}
+      {
+        "step": 1,
+        "criterion": "Proxy listening on 8080, baseline capture file created with minimum 10 flows",
+        "measurable": true
+      },
+      {
+        "step": 2,
+        "criterion": "HTTP requests complete and homepage/login page content captured",
+        "measurable": true
+      },
+      {
+        "step": 3,
+        "criterion": "Authentication endpoints identified in log output",
+        "measurable": true
+      },
+      {
+        "step": 4,
+        "criterion": "Login response captured - contains JWT token or HTTP 200 success code",
+        "measurable": true
+      },
+      {
+        "step": 5,
+        "criterion": "Authenticated proxy session established and authenticated flows captured",
+        "measurable": true
+      },
+      {
+        "step": 6,
+        "criterion": "User-specific endpoints accessed returning user data (200 status)",
+        "measurable": true
+      },
+      {
+        "step": 7,
+        "criterion": "Complete endpoint map created listing all captured API paths",
+        "measurable": true
+      },
+      {
+        "step": 8,
+        "criterion": "Sensitive data patterns identified (emails, tokens, IDs) in output",
+        "measurable": true
+      },
+      {
+        "step": 9,
+        "criterion": "Object reference IDs enumerated (at least 3 pattern types found)",
+        "measurable": true
+      },
+      {
+        "step": 10,
+        "criterion": "Baseline: minimum 5 flows, Authenticated: minimum 8 flows confirmed",
+        "measurable": true
+      },
+      {
+        "step": 11,
+        "criterion": "Minimum 6 testable hypotheses documented in hypotheses.md",
+        "measurable": true
+      },
+      {
+        "step": 12,
+        "criterion": "Session.md updated with target URL, file paths, and key findings",
+        "measurable": true
+      }
     ],
-    "per_subagent": [],
     "vulnerability_indicators": [
-      "200 OK response with different user's PII",
-      "Response contains user B's email/name/data",
-      "No authorization error (401/403) when accessing other user's profile"
+      "Numeric user IDs in URLs (e.g., /api/users/1) accessible via direct ID change",
+      "Missing authorization checks on /api/admin/* endpoints for non-admin users",
+      "Sensitive data visible in API responses without filtering (passwords, tokens, PII)",
+      "Price fields modifiable in POST requests to checkout endpoints",
+      "Expired/invalid JWT tokens accepted with 200 status responses",
+      "Order/review data returned for different user IDs without authorization error",
+      "File upload endpoints accepting executable file types",
+      "SQL error messages in responses indicating injection points"
     ],
-    "overall": "Confirmed whether user A can access user B's profile data via IDOR, with reproducible evidence",
+    "overall": "Initial hunt complete when: (1) Two capture files created (unauthenticated + authenticated) with minimum flow count verified, (2) All API endpoints mapped to logs with HTTP methods and parameters documented, (3) Minimum 6 testable vulnerability hypotheses generated based on assumption gaps, (4) Session memory updated with target details and captured file references, (5) Sensitive data exposure patterns identified with specific response examples, (6) IDOR and privilege escalation test targets prioritized with specific endpoint paths",
     "quality_standards": [
-      "All commands use mitmdump CLI exclusively",
-      "All evidence files saved in captures/ directory",
-      "Hypothesis documented before mutation testing"
+      "All mitmdump commands use explicit filter expressions (~u, ~d, ~m, ~bs, etc.)",
+      "Capture files named descriptively indicating content (baseline, authenticated, etc.)",
+      "Log files created with step numbers for traceability and reproducibility",
+      "Hypotheses documented with specific endpoint paths and expected bypass mechanism",
+      "Session memory references actual relative paths to capture/log files",
+      "All findings measurable with concrete evidence (status codes, response content)"
     ],
     "acceptance_criteria": [
-      "IDOR test produces 7 atomic actions with specific mitmdump commands",
-      "Evidence chain: baseline → mutated → response",
-      "Memory files updated at appropriate steps"
+      "At least 2 .mitm capture files created (unauthenticated and authenticated) and verified",
+      "Log files generated from steps 3, 4, 6, 7, 8, 9, 10 are readable and contain data",
+      "Hypotheses.md populated with at least 6 testable vulnerability theories with endpoint paths",
+      "Session.md updated with target URL, proxy port, captured file locations, and key findings",
+      "All atomic steps executed with mitmdump CLI commands (no GUI tools)",
+      "No application state modified (read-only reconnaissance only)"
+    ],
+    "evidence_requirements": [
+      "Baseline traffic capture showing homepage status 200 and login page access",
+      "Authenticated traffic showing successful API calls returning user-specific data",
+      "Endpoint map listing at least 8 distinct API paths with HTTP methods",
+      "Identified user IDs and order IDs with numeric enumeration pattern",
+      "Authentication token format (JWT vs session cookie) and header structure",
+      "Privilege/role indicators visible in requests or responses for escalation testing"
     ]
   }
 }

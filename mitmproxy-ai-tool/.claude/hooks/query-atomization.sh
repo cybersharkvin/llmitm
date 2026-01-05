@@ -71,12 +71,7 @@ INIT_AGENT_SIZE="$(wc -c < "$AGENT_FILE")"
 SETTINGS_FILE="$PROJECT_DIR/.claude/no-hooks.json"
 INIT_SETTINGS_EXISTS="$([ -f "$SETTINGS_FILE" ] && echo "EXISTS" || echo "MISSING")"
 
-# ==============================================================================
-# Read agent file
-# ==============================================================================
-AGENT_CONTENT=$(cat "$AGENT_FILE" 2>/dev/null)
-
-if [[ -z "$AGENT_CONTENT" ]]; then
+if [[ -z "$AGENT_FILE" ]]; then
   exit 0
 fi
 
@@ -212,8 +207,6 @@ JSON_SCHEMA='{
   "required": ["task", "assumptions", "target_analysis", "objectives", "dependencies", "atomic_actions", "success_criteria"]
 }'
 
-SYSTEM_PROMPT="$AGENT_CONTENT"
-
 # ==============================================================================
 # Execute Claude with Structured Outputs
 # ==============================================================================
@@ -227,14 +220,15 @@ START_TIME=$(date +%s.%N)
   echo "User prompt: $user_prompt"
 } > "$DEBUG_LOG"
 
-# Execute claude with explicit 120-second timeout (hooks have 180s total)
+# Execute claude with explicit 180-second timeout (hooks have 180s total)
 # Use structured JSON output via --json-schema
-RESULT=$(cd "$PROJECT_DIR" && echo "$user_prompt" | timeout 120 claude -p \
+RESULT=$(cd "$PROJECT_DIR" && echo "$user_prompt" | timeout 180 claude -p \
   --model haiku \
   --output-format json \
   --settings "$SETTINGS_FILE" \
-  --tools "" \
-  --system-prompt "$SYSTEM_PROMPT" \
+  --tools "Read" \
+  --agent atom \
+  --system-prompt "$AGENT_FILE" \
   --json-schema "$JSON_SCHEMA" \
   2>"$STDERR_FILE")
 
