@@ -124,8 +124,9 @@ cleanup_images() {
 
     # Remove any llmitm-related images (agent, firewall, etc.)
     # Docker-compose may name them with underscore or hyphen depending on context
-    for image_pattern in "llmitm_agent" "llmitm-agent" "llmitm_firewall" "llmitm-firewall" "atomic-firewall" "atomic_firewall"; do
-        if docker images --format '{{.Repository}}' | grep -q "$image_pattern"; then
+    # NOTE: Using exact match (^pattern$) to avoid affecting unrelated images
+    for image_pattern in "llmitm_agent" "llmitm-agent" "llmitm_firewall" "llmitm-firewall" "llmitm-llmitm" "llmitm-firewall" "atomic-firewall" "atomic_firewall"; do
+        if docker images --format '{{.Repository}}' | grep -q "^${image_pattern}$"; then
             log_info "Removing image: $image_pattern"
             docker rmi -f "$image_pattern" 2>/dev/null || true
         fi

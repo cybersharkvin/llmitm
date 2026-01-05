@@ -193,12 +193,54 @@ create_juice_shop() {
 }
 
 # =============================================================================
+# Step 5b: Connect Juice Shop to Firewall Network
+# =============================================================================
+# Juice Shop may exist on a different network (e.g., default bridge).
+# We need to connect it to llmitm_external so the firewall can proxy to it.
+
+connect_juice_shop_to_network() {
+    log_header "Connecting Juice Shop to Firewall Network"
+
+    local network_name="llmitm_external"
+
+    # Check if network exists (it's created by docker-compose)
+    if ! docker network ls --format '{{.Name}}' | grep -q "^${network_name}$"; then
+        log_info "Network ${network_name} doesn't exist yet, will be created by docker-compose"
+        return 0
+    fi
+
+    # Check if already connected
+    if docker inspect "$JUICE_SHOP_CONTAINER" --format='{{range $k, $v := .NetworkSettings.Networks}}{{$k}} {{end}}' | grep -q "$network_name"; then
+        log_success "Juice Shop already connected to ${network_name}"
+        return 0
+    fi
+
+    # Connect to the network
+    log_info "Connecting Juice Shop to ${network_name} network..."
+    if docker network connect "$network_name" "$JUICE_SHOP_CONTAINER" 2>/dev/null; then
+        log_success "Juice Shop connected to ${network_name}"
+    else
+        log_warn "Could not connect Juice Shop to ${network_name} (will retry after docker-compose up)"
+    fi
+}
+
+# =============================================================================
 # Step 6: Extract Juice Shop IP
 # =============================================================================
 
 get_juice_shop_ip() {
+    local network_name="llmitm_external"
+
+    # First, try to get IP from the llmitm_external network (preferred)
     local ip=$(docker inspect "$JUICE_SHOP_CONTAINER" \
-        --format='{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' 2>/dev/null)
+        --format="{{if index .NetworkSettings.Networks \"${network_name}\"}}{{index .NetworkSettings.Networks \"${network_name}\" \"IPAddress\"}}{{end}}" 2>/dev/null)
+
+    # If not on llmitm_external, fall back to any network (for initial setup)
+    if [ -z "$ip" ]; then
+        ip=$(docker inspect "$JUICE_SHOP_CONTAINER" \
+            --format='{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' 2>/dev/null)
+        log_warn "Juice Shop not yet on ${network_name}, using fallback IP: $ip"
+    fi
 
     if [ -z "$ip" ]; then
         exit_error "Could not extract IP for $JUICE_SHOP_CONTAINER container"
@@ -389,10 +431,14 @@ verify_setup() {
         fi
     )
 
-    # Get Juice Shop IP and verify it's in allowlist
+    # Get Juice Shop IP from llmitm_external and verify it's reachable
     local juice_ip=$(docker inspect "$JUICE_SHOP_CONTAINER" \
-        --format='{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}')
-    log_success "Juice Shop running at ${juice_ip}:3000"
+        --format='{{if index .NetworkSettings.Networks "llmitm_external"}}{{index .NetworkSettings.Networks "llmitm_external" "IPAddress"}}{{end}}' 2>/dev/null)
+    if [ -n "$juice_ip" ]; then
+        log_success "Juice Shop on llmitm_external at ${juice_ip}:3000"
+    else
+        log_warn "Juice Shop not on llmitm_external network - connectivity may fail"
+    fi
 }
 
 # =============================================================================
@@ -442,18 +488,35 @@ main() {
     create_juice_shop "$juice_status"
     echo ""
 
+    fix_workspace_permissions
+    echo ""
+
+    # Launch containers first (this creates the llmitm_external network)
+    launch_containers
+    echo ""
+
+    # Now connect Juice Shop to the firewall's network
+    connect_juice_shop_to_network
+    echo ""
+
+    # Get Juice Shop IP from the llmitm_external network
     log_header "Extracting Juice Shop IP"
     local juice_ip=$(get_juice_shop_ip)
     log_success "Juice Shop IP: $juice_ip"
     echo ""
 
-    fix_workspace_permissions
-    echo ""
-
+    # Update .env with the correct IP
     setup_env_file "$juice_ip"
     echo ""
 
-    launch_containers
+    # Restart firewall to pick up new TARGET_IPS from .env
+    log_header "Restarting Firewall with Updated Config"
+    (
+        cd "$SCRIPT_DIR"
+        docker compose restart firewall 2>&1 | grep -v "Already in use" || true
+    )
+    log_success "Firewall restarted with Juice Shop IP in allowlist"
+    sleep 2
     echo ""
 
     fix_named_volume_permissions
