@@ -403,6 +403,53 @@ fix_named_volume_permissions() {
 }
 
 # =============================================================================
+# Step 8c: Setup Transparent Proxy Routing
+# =============================================================================
+
+setup_transparent_routing() {
+    log_header "Setting Up Transparent Proxy Routing"
+
+    # Get firewall container's IP on internal network dynamically
+    local firewall_ip
+    firewall_ip=$(docker inspect llmitm-firewall \
+        --format='{{index .NetworkSettings.Networks "llmitm_internal" "IPAddress"}}' 2>/dev/null)
+
+    if [ -z "$firewall_ip" ]; then
+        # Try alternate network name format
+        firewall_ip=$(docker inspect llmitm-firewall \
+            --format='{{range $k, $v := .NetworkSettings.Networks}}{{if eq $k "llmitm_internal"}}{{$v.IPAddress}}{{end}}{{end}}' 2>/dev/null)
+    fi
+
+    if [ -z "$firewall_ip" ]; then
+        log_warn "Could not detect firewall IP, using default 172.28.0.2"
+        firewall_ip="172.28.0.2"
+    fi
+
+    log_info "Firewall IP: $firewall_ip"
+    log_info "Injecting default route into agent container..."
+
+    # Inject route - agent traffic goes through firewall
+    # NOTE: --privileged required for route manipulation
+    if docker exec --privileged llmitm-agent \
+        ip route replace default via "$firewall_ip" 2>/dev/null; then
+
+        # Verify route was set
+        local default_gw
+        default_gw=$(docker exec llmitm-agent ip route 2>/dev/null | grep "^default" | awk '{print $3}')
+
+        if [ "$default_gw" = "$firewall_ip" ]; then
+            log_success "Transparent routing configured (default via $firewall_ip)"
+        else
+            log_warn "Route set but verification shows: default via $default_gw"
+        fi
+    else
+        log_error "Could not inject route - docker exec --privileged failed"
+        log_info "Agent may not have transparent proxy routing"
+        return 1
+    fi
+}
+
+# =============================================================================
 # Step 9: Verify Setup
 # =============================================================================
 
@@ -493,6 +540,10 @@ main() {
 
     # Launch containers first (this creates the llmitm_external network)
     launch_containers
+    echo ""
+
+    # Setup transparent proxy routing (inject default route to firewall)
+    setup_transparent_routing
     echo ""
 
     # Now connect Juice Shop to the firewall's network

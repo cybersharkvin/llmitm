@@ -56,7 +56,7 @@ services:
     environment:
       - CLAUDE_API_KEY=${CLAUDE_API_KEY}
       - MITMPROXY_PORT=${MITMPROXY_PORT:-8080}
-      # NOTE: No HTTP_PROXY needed - transparent proxy via gateway
+      # NOTE: No HTTP_PROXY needed - transparent proxy via routing (set by launch.sh)
     volumes:
       # =========================================================================
       # SECURITY BOUNDARY: Agent only sees mitmproxy-ai-tool/ contents
@@ -91,14 +91,14 @@ networks:
   external:
     driver: bridge
 
-  # Internal network - routes through firewall container as gateway
+  # Internal network - isolated, no direct internet
   internal:
     driver: bridge
-    internal: false  # Allow outbound via gateway
+    internal: true  # KEY: No internet gateway - all traffic via firewall proxy
     ipam:
       config:
         - subnet: 172.28.0.0/24
-          gateway: 172.28.0.2  # Firewall container is the gateway
+          gateway: 172.28.0.1
 
 # =============================================================================
 # VOLUMES

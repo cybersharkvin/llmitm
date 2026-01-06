@@ -29,7 +29,7 @@ LLMitM transforms mitmproxy's CLI (`mitmdump`) into an LLM-operated security tes
 │                                                                            │
 │  ┌─────────────────┐        ┌───────────────────────────────────────────┐  │
 │  │ firewall        │        │ llmitm                                    │  │
-│  │ (squid proxy)   │◄──────►│ (claude + mitmproxy)                      │  │
+│  │ (SNI proxy)     │◄──────►│ (claude + mitmproxy)                      │  │
 │  │                 │        │                                           │  │
 │  │ ✓ Internet      │        │ ✗ No internet access                     │  │
 │  │ ✓ Allowlist     │        │ ✗ No NET_ADMIN capability                │  │
@@ -41,14 +41,21 @@ LLMitM transforms mitmproxy's CLI (`mitmdump`) into an LLM-operated security tes
 └───────────┼─────────────────────────────┼──────────────────────────────────┘
             │                             │
             ▼                             ▼
-        Internet                    No route out
-    (Claude API + targets)      (all traffic via proxy)
+        Internet                 Transparent routing
+    (Claude API + targets)       (via firewall gateway)
 ```
+
+**Transparent Proxy Architecture:**
+- Agent traffic routes through firewall via injected default gateway
+- Firewall intercepts HTTP (port 80) and HTTPS (port 443)
+- **HTTP**: Reads `Host` header for domain filtering
+- **HTTPS**: Reads SNI from TLS ClientHello - **no TLS decryption**
+- Agent needs **zero proxy configuration** - networking "just works"
 
 **Security Model:**
 - Agent container has **no direct internet access**
 - Agent container has **no capability to modify firewall rules**
-- All egress flows through firewall sidecar with allowlist
+- All egress flows through firewall sidecar with domain allowlist
 - Agent config (`.claude/`) is mounted **read-only**
 - Agent **cannot see** `docker-compose.yml` or `.devcontainer/` (infrastructure files)
 
@@ -254,15 +261,21 @@ Uses permission rules from `mitmproxy-ai-tool/.claude/settings.json`.
 llmitm/                              # Repository root (user controls infrastructure)
 ├── README.md                        # This file
 ├── docker-compose.yml               # Two-container orchestration
+├── launch.sh                        # Automated setup script
+├── cleanup.sh                       # Teardown script
 ├── .env.example                     # Environment template
 ├── .env                             # Your config (gitignored)
 ├── .devcontainer/                   # Container definitions
 │   ├── devcontainer.json            # VS Code integration
 │   ├── Dockerfile                   # Agent container image
 │   └── firewall/
-│       ├── Dockerfile               # Firewall sidecar image
-│       ├── entrypoint.sh            # Allowlist configuration
-│       └── squid.conf               # Proxy configuration
+│       ├── Dockerfile               # Firewall sidecar image (Python 3.11)
+│       ├── entrypoint.sh            # iptables + proxy startup
+│       ├── requirements.txt         # Python dependencies (pydantic)
+│       └── proxy/                   # SNI proxy implementation
+│           ├── models.py            # Pydantic config models
+│           ├── sni_parser.py        # TLS ClientHello SNI extraction
+│           └── sni_proxy.py         # Asyncio transparent proxy
 │
 └── mitmproxy-ai-tool/               # Agent working directory (/workspace)
     ├── .claude/
@@ -365,7 +378,7 @@ docker-compose logs firewall
 docker-compose logs -f firewall
 ```
 
-Squid logs show allowed/denied requests with timestamps.
+SNI proxy logs show `[ALLOW]` and `[BLOCK]` entries with domains and timestamps.
 
 ---
 
@@ -377,11 +390,15 @@ Squid logs show allowed/denied requests with timestamps.
 # Check firewall is running (from repo root)
 docker-compose ps
 
-# Check firewall logs
+# Check firewall logs for [BLOCK] entries
 docker-compose logs firewall
 
 # Test from inside agent container
 curl -v https://api.anthropic.com
+
+# Verify route is set correctly
+docker exec llmitm-agent ip route
+# Should show: default via 172.28.0.2
 ```
 
 ### Agent can't reach target
@@ -396,9 +413,15 @@ curl -v https://api.anthropic.com
    docker-compose restart firewall
    ```
 
-3. Check squid allowlist:
+3. Check firewall logs for blocked requests:
    ```bash
-   docker-compose exec firewall cat /etc/squid/allowlist.txt
+   docker-compose logs firewall | grep BLOCK
+   ```
+
+4. Verify transparent routing is working:
+   ```bash
+   docker exec llmitm-agent ip route
+   # Should show: default via 172.28.0.2
    ```
 
 ---

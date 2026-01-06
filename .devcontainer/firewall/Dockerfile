@@ -1,28 +1,29 @@
-FROM alpine:3.19
+FROM python:3.11-alpine
 
 LABEL maintainer="llmitm"
-LABEL description="Firewall sidecar for llmitm network isolation"
+LABEL description="Firewall sidecar with SNI-based transparent proxy"
 
-# Install networking tools
+# Install iptables and network tools
 RUN apk add --no-cache \
     iptables \
     ip6tables \
-    squid \
     dnsmasq \
     bind-tools \
     curl \
     bash
 
-# Create squid directories
-RUN mkdir -p /var/cache/squid /var/log/squid \
-    && chown -R squid:squid /var/cache/squid /var/log/squid
+# Install Python dependencies (minimal - just pydantic)
+COPY requirements.txt /etc/proxy/
+RUN pip install --no-cache-dir -r /etc/proxy/requirements.txt
 
-# Copy configuration and entrypoint
-COPY squid.conf /etc/squid/squid.conf
+# Copy proxy code
+COPY proxy/ /etc/proxy/
+
+# Copy entrypoint
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
-# Expose squid proxy port
-EXPOSE 3128
+# Expose proxy ports
+EXPOSE 8080 8443
 
 ENTRYPOINT ["/entrypoint.sh"]
