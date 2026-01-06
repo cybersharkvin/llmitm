@@ -27,22 +27,19 @@
 #   2. Hook Script Execute Permissions - Shell scripts need +x bit
 #      Fix: chmod u+x on all .claude/hooks/*.sh before container start
 #
-#   3. .claude/scripts/ Directory - Agent needs to create Python addons
-#      Fix: mkdir -p and ensure writable ownership
-#
-#   4. .git/ Ownership - Git commands fail if owned by root
+#   3. .git/ Ownership - Git commands fail if owned by root
 #      Fix: chown -R 1000:1000 on .git
 #
-#   5. Memory Files - Agent needs read/write to session/hypotheses/findings
+#   4. Memory Files - Agent needs read/write to session/hypotheses/findings
 #      Fix: Initialize with correct ownership and readable permissions
 #
-#   6. Host .env Permissions - Script needs to read environment file
+#   5. Host .env Permissions - Script needs to read environment file
 #      Fix: chmod 644 on .env
 #
-#   7. Parent Directory Traversal - Even subdirs need parent execute (+x)
+#   6. Parent Directory Traversal - Even subdirs need parent execute (+x)
 #      Fix: chmod +x on ATOMIC/ and parent directories
 #
-#   8. Docker Socket - On Linux, may have restrictive permissions
+#   7. Docker Socket - On Linux, may have restrictive permissions
 #      Fix: Verify user can run docker (docker group or sudo)
 #
 # PLATFORM SUPPORT:
@@ -280,12 +277,7 @@ fix_workspace_permissions() {
     chmod -R u+x "$workspace_dir/.claude/hooks/"*.sh 2>/dev/null || true
     chmod u+x "$workspace_dir/launch.sh" 2>/dev/null || true
 
-    # FIX #3: Ensure .claude/scripts/ directory exists and is writable
-    log_info "Ensuring .claude/scripts/ directory exists with correct permissions..."
-    mkdir -p "$workspace_dir/.claude/scripts" 2>/dev/null || true
-    chmod 755 "$workspace_dir/.claude/scripts" 2>/dev/null || true
-
-    # FIX #4: Initialize memory files with correct ownership and permissions
+    # FIX #3: Initialize memory files with correct ownership and permissions
     log_info "Initializing memory files..."
     mkdir -p "$workspace_dir/.claude/memory" 2>/dev/null || true
     touch "$workspace_dir/.claude/memory/session.md" 2>/dev/null || true
@@ -428,10 +420,12 @@ setup_transparent_routing() {
     log_info "Firewall IP: $firewall_ip"
     log_info "Injecting default route into agent container..."
 
-    # Inject route - agent traffic goes through firewall
-    # NOTE: --privileged required for route manipulation
-    if docker exec --privileged llmitm-agent \
-        ip route replace default via "$firewall_ip" 2>/dev/null; then
+    # Get agent container's PID for nsenter
+    local agent_pid
+    agent_pid=$(docker inspect llmitm-agent --format '{{.State.Pid}}')
+
+    # Inject route via nsenter (docker exec --privileged doesn't override cap_drop)
+    if sudo nsenter -t "$agent_pid" --net ip route add default via "$firewall_ip" 2>/dev/null; then
 
         # Verify route was set
         local default_gw
@@ -443,8 +437,8 @@ setup_transparent_routing() {
             log_warn "Route set but verification shows: default via $default_gw"
         fi
     else
-        log_error "Could not inject route - docker exec --privileged failed"
-        log_info "Agent may not have transparent proxy routing"
+        log_error "Could not inject route - nsenter failed (requires sudo)"
+        log_info "Try: sudo nsenter -t $agent_pid --net ip route add default via $firewall_ip"
         return 1
     fi
 }

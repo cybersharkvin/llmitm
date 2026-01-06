@@ -69,10 +69,9 @@ services:
       - ./mitmproxy-ai-tool/.claude/hooks:/workspace/.claude/hooks:ro
       - ./mitmproxy-ai-tool/.claude/no-hooks.json:/workspace/.claude/no-hooks.json:ro
       - ./mitmproxy-ai-tool/.claude/settings.json:/workspace/.claude/settings.json:ro
-      # WRITABLE: Agent must update memory files, create addons, and manage scripts
+      # WRITABLE: Agent must update memory files and create addons
       - ./mitmproxy-ai-tool/.claude/memory:/workspace/.claude/memory
       - ./mitmproxy-ai-tool/.claude/agents:/workspace/.claude/agents
-      - ./mitmproxy-ai-tool/.claude/scripts:/workspace/.claude/scripts
       # Data volumes - writable for captures and certs
       - llmitm-captures:/workspace/captures
       - llmitm-certs:/workspace/certs
