@@ -96,6 +96,24 @@ if [ -n "$TARGET_IPS" ]; then
     done
 fi
 
+# =============================================================================
+# TRANSPARENT PROXY INTERCEPTION
+# =============================================================================
+# Redirect HTTP (80) and HTTPS (443) from agent container to squid
+# This enables transparent proxying - agent doesn't need to know about proxy
+
+log_info "Configuring transparent proxy interception..."
+
+# Redirect HTTP traffic to squid
+iptables -t nat -A PREROUTING -i eth1 -p tcp --dport 80 -j REDIRECT --to-port 3128
+log_info "  + HTTP (port 80) → squid:3128"
+
+# Redirect HTTPS traffic to squid
+iptables -t nat -A PREROUTING -i eth1 -p tcp --dport 443 -j REDIRECT --to-port 3128
+log_info "  + HTTPS (port 443) → squid:3128"
+
+log_info "Transparent proxy interception configured"
+
 log_info "iptables rules:"
 iptables -L -v -n
 
