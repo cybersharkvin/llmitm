@@ -90,14 +90,14 @@ networks:
   external:
     driver: bridge
 
-  # Internal network - isolated, no direct internet
+  # Internal network - firewall intercepts traffic via iptables (not as gateway)
   internal:
     driver: bridge
-    internal: true  # KEY: No internet gateway - all traffic via firewall proxy
+    internal: false  # Allow outbound (route injection sets firewall as gateway)
     ipam:
       config:
         - subnet: 172.28.0.0/24
-          gateway: 172.28.0.1
+          gateway: 172.28.0.1  # Docker bridge gateway (nsenter injects route to .2)
 
 # =============================================================================
 # VOLUMES

@@ -18,6 +18,9 @@ log_warn() { echo -e "${YELLOW}[FIREWALL]${NC} $1"; }
 
 log_info "Configuring iptables..."
 
+# Source IP-based rules (interface-agnostic - Docker doesn't guarantee eth0/eth1 order)
+# Internal network: 172.28.0.0/24, Firewall IP: 172.28.0.2
+
 iptables -F
 iptables -t nat -F
 
@@ -34,12 +37,12 @@ iptables -A OUTPUT -o lo -j ACCEPT
 iptables -A INPUT -m state --state ESTABLISHED,RELATED -j ACCEPT
 iptables -A OUTPUT -m state --state ESTABLISHED,RELATED -j ACCEPT
 
-# NAT for internal network (eth0=internal, eth1=external)
-iptables -t nat -A POSTROUTING -s 172.28.0.0/24 -o eth1 -j MASQUERADE
+# NAT for internal network (source IP-based, exclude internal-to-internal)
+iptables -t nat -A POSTROUTING -s 172.28.0.0/24 ! -d 172.28.0.0/24 -j MASQUERADE
 
-# Forward from internal to external
-iptables -A FORWARD -i eth0 -o eth1 -j ACCEPT
-iptables -A FORWARD -i eth1 -o eth0 -m state --state ESTABLISHED,RELATED -j ACCEPT
+# Forward rules (source/dest based, not interface based)
+iptables -A FORWARD -s 172.28.0.0/24 -j ACCEPT
+iptables -A FORWARD -d 172.28.0.0/24 -m state --state ESTABLISHED,RELATED -j ACCEPT
 
 # TARGET_IPS direct passthrough (bypass proxy entirely)
 if [ -n "$TARGET_IPS" ]; then
@@ -49,15 +52,18 @@ if [ -n "$TARGET_IPS" ]; then
         ip=$(echo "$ip" | xargs)
         if [ -n "$ip" ]; then
             log_info "  + $ip (direct)"
-            # Insert BEFORE the REDIRECT rules
-            iptables -t nat -I PREROUTING -i eth0 -d "$ip" -j ACCEPT
+            # Insert BEFORE the REDIRECT rules (source IP-based)
+            iptables -t nat -I PREROUTING -s 172.28.0.0/24 -d "$ip" -j ACCEPT
         fi
     done
 fi
 
-# TRANSPARENT PROXY: Redirect HTTP/HTTPS to SNI proxy (eth0=internal)
-iptables -t nat -A PREROUTING -i eth0 -p tcp --dport 80 -j REDIRECT --to-port 8080
-iptables -t nat -A PREROUTING -i eth0 -p tcp --dport 443 -j REDIRECT --to-port 8443
+# TRANSPARENT PROXY: Redirect HTTP/HTTPS to SNI proxy
+# First: Skip firewall's own traffic (prevent redirect loops)
+iptables -t nat -A PREROUTING -s 172.28.0.2 -j RETURN
+# Then: Redirect from internal network
+iptables -t nat -A PREROUTING -s 172.28.0.0/24 -p tcp --dport 80 -j REDIRECT --to-port 8080
+iptables -t nat -A PREROUTING -s 172.28.0.0/24 -p tcp --dport 443 -j REDIRECT --to-port 8443
 
 log_info "iptables configured"
 

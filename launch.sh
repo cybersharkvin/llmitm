@@ -425,7 +425,8 @@ setup_transparent_routing() {
     agent_pid=$(docker inspect llmitm-agent --format '{{.State.Pid}}')
 
     # Inject route via nsenter (docker exec --privileged doesn't override cap_drop)
-    if sudo nsenter -t "$agent_pid" --net ip route add default via "$firewall_ip" 2>/dev/null; then
+    # Use 'replace' instead of 'add' since Docker creates a default route to bridge gateway
+    if sudo nsenter -t "$agent_pid" --net ip route replace default via "$firewall_ip" 2>/dev/null; then
 
         # Verify route was set
         local default_gw
