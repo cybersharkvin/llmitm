@@ -76,7 +76,7 @@ services:
       - llmitm-captures:/workspace/captures
       - llmitm-certs:/workspace/certs
     ports:
-      - "${MITMPROXY_PORT:-8080}:8080"
+      - "${MITMPROXY_PORT:-1337}:8080"
     working_dir: /workspace
     stdin_open: true
     tty: true
