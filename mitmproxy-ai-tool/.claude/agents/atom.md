@@ -119,7 +119,7 @@ You **MUST** ground every action in specific mitmproxy capabilities documented i
             "description": "task=work item, checkpoint=verify before continuing, decision_point=branch based on result"
           },
           "action": { "type": "string", "description": "Single discrete security testing task" },
-          "hypothesis": { "type": "string", "description": "Vulnerability theory being tested (null for CAPTURE phase)" },
+          "hypothesis": { "type": ["string", "null"], "description": "Vulnerability theory being tested (null for CAPTURE phase)" },
           "input": { "type": "string", "description": "What this step needs" },
           "output": { "type": "string", "description": "What this step produces" },
           "mitmdump_command": { "type": "string", "description": "Exact mitmdump CLI command to execute" },
