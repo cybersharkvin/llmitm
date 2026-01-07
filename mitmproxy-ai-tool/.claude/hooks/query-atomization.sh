@@ -250,18 +250,78 @@ rm -f "$STDERR_FILE"
 # WRITE RESULTS TO FILES
 # ==============================================================================
 
-# Write to debug log ONLY if not a no-atom request (preserve debug on skip)
-if [[ "$user_prompt" != no-atom* ]]; then
-  {
-    echo "# Atomizer Debug Log"
-    echo "**$(date)** - Exit code: $EXIT_CODE, Duration: ${DURATION}s"
-    echo ""
-    echo "## Response"
-    echo '```json'
-    echo "$RESULT"
+# Write comprehensive debug log
+{
+  echo "# Atomizer Debug Log"
+  echo "**$(date)**"
+  echo ""
+  echo "## Execution Summary"
+  echo "| Field | Value |"
+  echo "|-------|-------|"
+  echo "| Exit Code | $EXIT_CODE |"
+  echo "| Duration | ${DURATION}s |"
+  echo "| Working Dir | $INIT_PWD |"
+  echo "| Claude Path | $INIT_CLAUDE_PATH |"
+  echo "| Agent File | $AGENT_FILE ($INIT_AGENT_SIZE bytes) |"
+  echo "| Settings File | $SETTINGS_FILE ($INIT_SETTINGS_EXISTS) |"
+  echo ""
+  echo "## User Prompt"
+  echo '```'
+  echo "$user_prompt"
+  echo '```'
+  echo ""
+  echo "## stderr Output"
+  if [[ -n "$STDERR_CONTENT" ]]; then
     echo '```'
-  } > "$DEBUG_LOG"
-fi
+    echo "$STDERR_CONTENT"
+    echo '```'
+  else
+    echo "_No stderr output_"
+  fi
+  echo ""
+  echo "## stdout (Raw Response)"
+  echo '```json'
+  echo "$RESULT"
+  echo '```'
+  echo ""
+  echo "## Task JSON Extraction"
+  # Show what was extracted
+  TASK_JSON_PREVIEW=""
+  if [[ $EXIT_CODE -eq 0 && -n "$RESULT" ]]; then
+    TASK_JSON=$(echo "$RESULT" | jq -r '.structured_output // empty' 2>/dev/null)
+    if [[ -n "$TASK_JSON" && "$TASK_JSON" != "null" ]]; then
+      echo "**Source**: .structured_output field"
+      TASK_JSON_PREVIEW="$TASK_JSON"
+    else
+      RAW_RESULT=$(echo "$RESULT" | jq -r '.result // empty' 2>/dev/null)
+      if [[ -n "$RAW_RESULT" ]]; then
+        CLEANED=$(echo "$RAW_RESULT" | awk '/^```json/,/^```$/' | sed '1d;$d')
+        TASK_JSON=$(echo "$CLEANED" | jq '.' 2>/dev/null)
+        if [[ -n "$TASK_JSON" && "$TASK_JSON" != "null" ]]; then
+          echo "**Source**: .result field (extracted from markdown fence)"
+          TASK_JSON_PREVIEW="$TASK_JSON"
+        else
+          echo "**ERROR**: Failed to extract JSON from .result field"
+          echo "Raw .result content (first 500 chars):"
+          echo '```'
+          echo "${RAW_RESULT:0:500}"
+          echo '```'
+        fi
+      else
+        echo "**ERROR**: No .structured_output or .result field found"
+      fi
+    fi
+  else
+    echo "**ERROR**: Exit code $EXIT_CODE or empty RESULT - skipping extraction"
+  fi
+  if [[ -n "$TASK_JSON_PREVIEW" ]]; then
+    echo ""
+    echo "**Extracted JSON** (first 1000 chars):"
+    echo '```json'
+    echo "${TASK_JSON_PREVIEW:0:1000}"
+    echo '```'
+  fi
+} > "$DEBUG_LOG"
 
 # Write structured output to task.md
 if [[ $EXIT_CODE -eq 0 && -n "$RESULT" ]]; then
