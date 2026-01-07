@@ -50,65 +50,136 @@ You **MUST** output ONLY a valid JSON object matching the schema below. No prose
 
 You **MUST** ground every action in specific mitmproxy capabilities documented in CLAUDE.md and mitmdump-cheatsheet.md.
 
+## JSON SCHEMA
+
 ```json
 {
-  "task": "Brief security testing objective",
-  "assumptions": [
-    "Implicit inference about target behavior",
-    "Assumption about security controls that may be tested"
-  ],
-  "target_analysis": {
-    "application_purpose": "What the application does",
-    "identified_assumptions": ["Business logic assumptions", "Developer assumptions"],
-    "assumption_gaps": ["Where assumptions may conflict - priority test areas"],
-    "attack_surface": ["Interesting endpoints, parameters, or features to test"]
-  },
-  "objectives": {
-    "primary": ["Main security testing goal"],
-    "supporting": ["Enabler goals that support primary objectives"]
-  },
-  "dependencies": {
-    "prerequisites": ["Required before starting - scope confirmation, auth session, etc."],
-    "constraints": ["Limitations - scope boundaries, allowlisted domains, ethical bounds"],
-    "sequential": ["Must happen in order - capture before analyze, etc."],
-    "parallel": ["Can happen simultaneously - independent hypothesis tests"]
-  },
-  "atomic_actions": [
-    {
-      "step": 1,
-      "phase": "CAPTURE|ANALYZE|MUTATE|REPLAY|OBSERVE",
-      "type": "task|checkpoint|decision_point",
-      "action": "Single discrete security testing task",
-      "hypothesis": "What vulnerability theory this tests (null for CAPTURE phase)",
-      "input": "What this step needs",
-      "output": "What this step produces",
-      "mitmdump_command": "Exact CLI command (required if not using python_addon)",
-      "python_addon": "Python code snippet if custom logic needed (required if not using mitmdump_command)",
-      "file": "Path to capture/evidence file if applicable",
-      "memory_update": "session|hypotheses|findings - which memory file to update (optional)",
-      "depends_on": []
+  "type": "object",
+  "properties": {
+    "task": { "type": "string", "description": "Brief security testing objective" },
+    "assumptions": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Implicit assumptions about target behavior, security controls, or business logic"
+    },
+    "target_analysis": {
+      "type": "object",
+      "properties": {
+        "application_purpose": { "type": "string", "description": "What the application does" },
+        "identified_assumptions": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Business logic and developer assumptions"
+        },
+        "assumption_gaps": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Where assumptions may be wrong - priority test areas"
+        },
+        "attack_surface": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Interesting endpoints, parameters, or features to test"
+        }
+      },
+      "required": ["application_purpose", "identified_assumptions", "assumption_gaps", "attack_surface"]
+    },
+    "objectives": {
+      "type": "object",
+      "properties": {
+        "primary": { "type": "array", "items": { "type": "string" }, "description": "Main security testing goals" },
+        "supporting": { "type": "array", "items": { "type": "string" }, "description": "Enabler goals" }
+      },
+      "required": ["primary", "supporting"]
+    },
+    "dependencies": {
+      "type": "object",
+      "properties": {
+        "prerequisites": { "type": "array", "items": { "type": "string" }, "description": "Required before starting - scope confirmation, auth tokens, captures" },
+        "constraints": { "type": "array", "items": { "type": "string" }, "description": "Scope boundaries, allowlisted domains, rate limits" },
+        "sequential": { "type": "array", "items": { "type": "string" }, "description": "Steps that must happen in order" },
+        "parallel": { "type": "array", "items": { "type": "string" }, "description": "Steps that can happen simultaneously" }
+      },
+      "required": ["prerequisites", "constraints", "sequential", "parallel"]
+    },
+    "atomic_actions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "step": { "type": "integer", "description": "Step number" },
+          "phase": {
+            "type": "string",
+            "enum": ["CAPTURE", "ANALYZE", "MUTATE", "REPLAY", "OBSERVE"],
+            "description": "CAMRO workflow phase"
+          },
+          "type": {
+            "type": "string",
+            "enum": ["task", "checkpoint", "decision_point"],
+            "description": "task=work item, checkpoint=verify before continuing, decision_point=branch based on result"
+          },
+          "action": { "type": "string", "description": "Single discrete security testing task" },
+          "hypothesis": { "type": "string", "description": "Vulnerability theory being tested (null for CAPTURE phase)" },
+          "input": { "type": "string", "description": "What this step needs" },
+          "output": { "type": "string", "description": "What this step produces" },
+          "mitmdump_command": { "type": "string", "description": "Exact mitmdump CLI command to execute" },
+          "python_addon": { "type": "string", "description": "Python addon code if custom detection logic needed" },
+          "file": { "type": "string", "description": "Path to capture/evidence file (in captures/ directory)" },
+          "memory_update": {
+            "type": "string",
+            "enum": ["session", "hypotheses", "findings"],
+            "description": "Which memory file to update after this step"
+          },
+          "depends_on": {
+            "type": "array",
+            "items": { "type": "integer" },
+            "description": "Step numbers this step depends on"
+          }
+        },
+        "required": ["step", "phase", "type", "action", "input", "output", "depends_on"]
+      }
+    },
+    "success_criteria": {
+      "type": "object",
+      "properties": {
+        "per_step": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "step": { "type": "integer" },
+              "criterion": { "type": "string" },
+              "measurable": { "type": "boolean" }
+            },
+            "required": ["step", "criterion", "measurable"]
+          }
+        },
+        "vulnerability_indicators": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "What would indicate a security vulnerability exists"
+        },
+        "overall": { "type": "string", "description": "What constitutes complete success for this testing objective" },
+        "quality_standards": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Code quality, style, or technical requirements"
+        },
+        "acceptance_criteria": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "User-facing requirements that define done"
+        },
+        "evidence_requirements": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "What evidence is needed for a valid bug bounty report"
+        }
+      },
+      "required": ["per_step", "vulnerability_indicators", "overall", "quality_standards", "acceptance_criteria", "evidence_requirements"]
     }
-  ],
-  "success_criteria": {
-    "per_step": [
-      {"step": 1, "criterion": "How to verify step completed", "measurable": true}
-    ],
-    "vulnerability_indicators": ["What would indicate a security issue"],
-    "overall": "What constitutes complete success for this testing objective",
-    "quality_standards": [
-      "All commands must use mitmdump CLI exclusively",
-      "All findings must have reproducible evidence"
-    ],
-    "acceptance_criteria": [
-      "Hypotheses documented before testing",
-      "Evidence files saved for confirmed findings"
-    ],
-    "evidence_requirements": [
-      "Exact mitmdump commands for reproduction",
-      "Before/after response comparison",
-      "Impact assessment and severity rating"
-    ]
-  }
+  },
+  "required": ["task", "assumptions", "target_analysis", "objectives", "dependencies", "atomic_actions", "success_criteria"]
 }
 ```
 
@@ -186,7 +257,7 @@ You **MUST** ground every action in specific mitmproxy capabilities documented i
 
 ---
 
-## Example: IDOR Vulnerability Test
+## Example Output: IDOR Vulnerability Test
 
 User request: "Test for IDOR vulnerabilities in the user profile API"
 
@@ -207,6 +278,12 @@ User request: "Test for IDOR vulnerabilities in the user profile API"
     "assumption_gaps": [
       "Gap: Server may not verify user ID ownership against session token",
       "Gap: Numeric IDs may be enumerable without rate limiting"
+    ],
+    "attack_surface": [
+      "GET /api/v1/users/{id}/profile - primary profile retrieval endpoint",
+      "PATCH /api/v1/users/{id}/profile - profile update endpoint",
+      "GET /api/v1/users/{id}/settings - user settings endpoint",
+      "User ID parameter in path, query string, or request body"
     ]
   },
   "objectives": {
@@ -245,11 +322,9 @@ User request: "Test for IDOR vulnerabilities in the user profile API"
       "phase": "CAPTURE",
       "type": "task",
       "action": "Capture authenticated profile request for user A",
-      "hypothesis": null,
       "input": "Browser session with user A logged in",
       "output": "Baseline traffic file with profile request",
       "mitmdump_command": "mitmdump -w captures/profile-baseline.mitm \"~d api.target.com & ~u /profile\"",
-      "python_addon": null,
       "file": "captures/profile-baseline.mitm",
       "memory_update": "session",
       "depends_on": []
@@ -259,13 +334,9 @@ User request: "Test for IDOR vulnerabilities in the user profile API"
       "phase": "ANALYZE",
       "type": "task",
       "action": "Identify user ID parameter in profile requests",
-      "hypothesis": null,
       "input": "captures/profile-baseline.mitm",
       "output": "Understanding of how user ID is transmitted (path, query, body, header)",
       "mitmdump_command": "mitmdump -nr captures/profile-baseline.mitm --flow-detail 3 \"~u /profile\"",
-      "python_addon": null,
-      "file": null,
-      "memory_update": null,
       "depends_on": [1]
     },
     {
@@ -276,8 +347,6 @@ User request: "Test for IDOR vulnerabilities in the user profile API"
       "hypothesis": "User A can access user B's profile by changing user_id parameter",
       "input": "Analysis from step 2",
       "output": "Documented hypothesis with planned test commands",
-      "mitmdump_command": null,
-      "python_addon": null,
       "file": ".claude/memory/hypotheses.md",
       "memory_update": "hypotheses",
       "depends_on": [2]
@@ -291,9 +360,7 @@ User request: "Test for IDOR vulnerabilities in the user profile API"
       "input": "captures/profile-baseline.mitm, user B's ID",
       "output": "Mutated request file targeting user B's data",
       "mitmdump_command": "mitmdump -nr captures/profile-baseline.mitm -B \"/~q/user_id=123/user_id=456\" -w captures/idor-test.mitm",
-      "python_addon": null,
       "file": "captures/idor-test.mitm",
-      "memory_update": null,
       "depends_on": [3]
     },
     {
@@ -305,9 +372,7 @@ User request: "Test for IDOR vulnerabilities in the user profile API"
       "input": "captures/idor-test.mitm",
       "output": "Server response to cross-user request",
       "mitmdump_command": "mitmdump -C captures/idor-test.mitm -w captures/idor-response.mitm --flow-detail 3",
-      "python_addon": null,
       "file": "captures/idor-response.mitm",
-      "memory_update": null,
       "depends_on": [4]
     },
     {
@@ -319,8 +384,6 @@ User request: "Test for IDOR vulnerabilities in the user profile API"
       "input": "captures/idor-response.mitm",
       "output": "Determination: IDOR confirmed or disproved",
       "mitmdump_command": "mitmdump -nr captures/idor-response.mitm --flow-detail 4 \"~bs email|name|address\"",
-      "python_addon": null,
-      "file": null,
       "memory_update": "hypotheses",
       "depends_on": [5]
     },
@@ -329,11 +392,8 @@ User request: "Test for IDOR vulnerabilities in the user profile API"
       "phase": "OBSERVE",
       "type": "task",
       "action": "Document confirmed finding with reproducible evidence",
-      "hypothesis": null,
       "input": "All .mitm files from test, analysis from step 6",
       "output": "Vulnerability report in findings.md with severity, reproduction steps, impact",
-      "mitmdump_command": null,
-      "python_addon": null,
       "file": ".claude/memory/findings.md",
       "memory_update": "findings",
       "depends_on": [6]
@@ -348,6 +408,33 @@ User request: "Test for IDOR vulnerabilities in the user profile API"
       {"step": 5, "criterion": "Replay completes without connection errors", "measurable": true},
       {"step": 6, "criterion": "Response analyzed for cross-user data indicators", "measurable": true},
       {"step": 7, "criterion": "Finding documented with all evidence files referenced", "measurable": true}
+    ],
+    "vulnerability_indicators": [
+      "HTTP 200 response containing user B's PII (email, name, address) when requested with user A's session",
+      "Response body differs from user A's profile data",
+      "No authorization error (401/403) when accessing another user's resource",
+      "Successful enumeration of multiple user profiles with sequential IDs"
+    ],
+    "overall": "Confirmed IDOR vulnerability with documented proof that user A can access user B's profile data by manipulating the user_id parameter, including reproducible mitmdump commands and captured evidence files",
+    "quality_standards": [
+      "All mitmdump commands must be exact and reproducible",
+      "All captured .mitm files must be preserved as evidence",
+      "Hypothesis must be documented before mutation testing begins",
+      "Findings must include severity rating based on data sensitivity"
+    ],
+    "acceptance_criteria": [
+      "At least one IDOR test completed through full CAMRO workflow",
+      "Hypothesis documented in hypotheses.md before testing",
+      "Clear determination: vulnerability confirmed or ruled out",
+      "If confirmed: complete reproduction steps documented"
+    ],
+    "evidence_requirements": [
+      "Original baseline capture (profile-baseline.mitm)",
+      "Mutated request file (idor-test.mitm)",
+      "Response capture showing unauthorized data access (idor-response.mitm)",
+      "Before/after comparison showing different user data returned",
+      "Exact mitmdump commands for full reproduction",
+      "Impact assessment with CVSS score or equivalent severity rating"
     ]
   }
 }
