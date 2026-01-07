@@ -10,8 +10,8 @@
 
 # Determine paths FIRST before anything else
 PROJECT_DIR="${CLAUDE_PROJECT_DIR:-$(pwd)}"
-DEBUG_LOG="$PROJECT_DIR/.claude/atomDebug.md"
-TASK_FILE="$PROJECT_DIR/.claude/memory/task.json"
+DEBUG_LOG="./.claude/atomDebug.md"
+TASK_FILE="./.claude/memory/task.json"
 
 # ==============================================================================
 # Read Input BEFORE any debug file operations
@@ -61,7 +61,7 @@ fi
 INIT_CLAUDE_PATH="$(which claude)"
 
 # Check if agent file exists
-AGENT_FILE="$PROJECT_DIR/.claude/agents/atom.md"
+AGENT_FILE="./.claude/agents/atom.md"
 if [[ ! -f "$AGENT_FILE" ]]; then
   exit 0
 fi
@@ -227,8 +227,7 @@ RESULT=$(cd "$PROJECT_DIR" && echo "$user_prompt" | timeout 180 claude -p \
   --output-format json \
   --settings "$SETTINGS_FILE" \
   --tools "Read" \
-  --agent atom \
-  --system-prompt "$AGENT_FILE" \
+  --system-prompt-file "./.claude/agents/atom.md" \
   --json-schema "$JSON_SCHEMA" \
   2>"$STDERR_FILE")
 
