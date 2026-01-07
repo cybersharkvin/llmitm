@@ -97,52 +97,85 @@ confirm() {
 cleanup_containers() {
     log_header "Stopping & Removing Containers"
 
-    # Stop and remove llmitm agent
-    if docker ps -a --format '{{.Names}}' | grep -q "^llmitm-agent$"; then
-        log_info "Removing container: llmitm-agent"
-        docker rm -f llmitm-agent 2>/dev/null || true
-        log_success "Removed llmitm-agent"
+    local containers_to_remove=""
+
+    # Method 1: Find by container name (handles docker-compose project name prefixes)
+    # Matches: llmitm-agent, llmitm-firewall, atomic-llmitm-1, llmitm_llmitm_1, etc.
+    local by_name
+    by_name=$(docker ps -a --format '{{.Names}}' | grep -E "(llmitm|juice-shop)" || true)
+
+    # Method 2: Find containers using llmitm volumes (catches VS Code devcontainers with random names)
+    local by_volume=""
+    for vol in llmitm-captures llmitm-certs; do
+        if docker volume ls --format '{{.Name}}' | grep -qE "^.*${vol}$"; then
+            by_volume="${by_volume} $(docker ps -a --filter volume="${vol}" --format '{{.Names}}' 2>/dev/null || true)"
+        fi
+    done
+
+    # Method 3: Find by image name containing llmitm or mitmproxy
+    local by_image
+    by_image=$(docker ps -a --format '{{.Names}} {{.Image}}' | grep -E "(llmitm|mitmproxy)" | awk '{print $1}' || true)
+
+    # Combine and deduplicate
+    containers_to_remove=$(echo "$by_name $by_volume $by_image" | tr ' ' '\n' | grep -v '^$' | sort -u | tr '\n' ' ')
+
+    if [ -z "$(echo "$containers_to_remove" | tr -d ' ')" ]; then
+        log_info "No llmitm containers found"
+        return 0
     fi
 
-    # Stop and remove firewall sidecar
-    if docker ps -a --format '{{.Names}}' | grep -q "^llmitm-firewall$"; then
-        log_info "Removing container: llmitm-firewall"
-        docker rm -f llmitm-firewall 2>/dev/null || true
-        log_success "Removed llmitm-firewall"
-    fi
-
-    # Stop and remove Juice Shop (if created by launch.sh)
-    if docker ps -a --format '{{.Names}}' | grep -q "^juice-shop$"; then
-        log_info "Removing container: juice-shop"
-        docker rm -f juice-shop 2>/dev/null || true
-        log_success "Removed juice-shop"
-    fi
+    for container in $containers_to_remove; do
+        log_info "Removing container: $container"
+        if docker rm -f "$container" 2>/dev/null; then
+            log_success "Removed container: $container"
+        else
+            log_warn "Failed to remove container: $container"
+        fi
+    done
 }
 
 cleanup_images() {
     log_header "Removing Images"
 
-    # Remove any llmitm-related images (agent, firewall, etc.)
-    # Docker-compose may name them with underscore or hyphen depending on context
-    # NOTE: Using exact match (^pattern$) to avoid affecting unrelated images
-    for image_pattern in "llmitm_agent" "llmitm-agent" "llmitm_firewall" "llmitm-firewall" "llmitm-llmitm" "llmitm-firewall" "atomic-firewall" "atomic_firewall"; do
-        if docker images --format '{{.Repository}}' | grep -q "^${image_pattern}$"; then
-            log_info "Removing image: $image_pattern"
-            docker rmi -f "$image_pattern" 2>/dev/null || true
+    # Find ALL llmitm-related images (handles docker-compose project name prefixes)
+    # Matches: atomic-llmitm, atomic-firewall, llmitm_agent, etc.
+    local images_to_remove
+    images_to_remove=$(docker images --format '{{.Repository}}' | grep -E "(atomic|llmitm)" | sort -u || true)
+
+    if [ -z "$images_to_remove" ]; then
+        log_info "No llmitm images found"
+        return 0
+    fi
+
+    for image in $images_to_remove; do
+        log_info "Removing image: $image"
+        if docker rmi -f "$image" 2>/dev/null; then
+            log_success "Removed image: $image"
+        else
+            log_warn "Failed to remove image: $image"
         fi
     done
-    log_success "Removed all llmitm images"
 }
 
 cleanup_networks() {
     log_header "Removing Networks"
 
-    # Remove custom networks
-    for network in atomic_internal atomic_external llmitm_internal llmitm_external; do
-        if docker network ls --format '{{.Name}}' | grep -q "^${network}$"; then
-            log_info "Removing network: $network"
-            docker network rm "$network" 2>/dev/null || true
+    # Find ALL llmitm-related networks (handles docker-compose project name prefixes)
+    # Matches: atomic_internal, atomic_external, llmitm_internal, atomic-default, etc.
+    local networks_to_remove
+    networks_to_remove=$(docker network ls --format '{{.Name}}' | grep -E "(atomic|llmitm)_(internal|external|default)" || true)
+
+    if [ -z "$networks_to_remove" ]; then
+        log_info "No llmitm networks found"
+        return 0
+    fi
+
+    for network in $networks_to_remove; do
+        log_info "Removing network: $network"
+        if docker network rm "$network" 2>/dev/null; then
             log_success "Removed network: $network"
+        else
+            log_warn "Failed to remove network: $network (may have active endpoints)"
         fi
     done
 }
@@ -155,12 +188,22 @@ cleanup_volumes() {
         return 0
     fi
 
-    # Remove data volumes
-    for volume in llmitm-captures llmitm-certs; do
-        if docker volume ls --format '{{.Name}}' | grep -q "^${volume}$"; then
-            log_info "Removing volume: $volume"
-            docker volume rm "$volume" 2>/dev/null || true
+    # Find ALL llmitm volumes (docker-compose prefixes with project name)
+    # This catches: llmitm-captures, atomic_llmitm-captures, llmitm_llmitm-captures, etc.
+    local volumes_to_remove
+    volumes_to_remove=$(docker volume ls --format '{{.Name}}' | grep -E "llmitm-(captures|certs)$" || true)
+
+    if [ -z "$volumes_to_remove" ]; then
+        log_info "No llmitm volumes found"
+        return 0
+    fi
+
+    for volume in $volumes_to_remove; do
+        log_info "Removing volume: $volume"
+        if docker volume rm "$volume" 2>/dev/null; then
             log_success "Removed volume: $volume"
+        else
+            log_warn "Failed to remove volume: $volume (may be in use)"
         fi
     done
 }
