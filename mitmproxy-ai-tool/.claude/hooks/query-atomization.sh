@@ -71,7 +71,23 @@ INIT_AGENT_SIZE="$(wc -c < "$AGENT_FILE")"
 SETTINGS_FILE="$PROJECT_DIR/.claude/no-hooks.json"
 INIT_SETTINGS_EXISTS="$([ -f "$SETTINGS_FILE" ] && echo "EXISTS" || echo "MISSING")"
 
-if [[ -z "$AGENT_FILE" ]]; then
+# Check memory files
+INIT_MEMORY_FILES=""
+for memfile in session.md hypotheses.md findings.md; do
+  filepath="./.claude/memory/$memfile"
+  if [[ -f "$filepath" ]]; then
+    INIT_MEMORY_FILES+="  - $memfile: EXISTS ($(wc -c < "$filepath") bytes)\n"
+  else
+    INIT_MEMORY_FILES+="  - $memfile: MISSING\n"
+  fi
+done
+
+# ==============================================================================
+# Read agent file
+# ==============================================================================
+AGENT_CONTENT=$(cat "$AGENT_FILE" 2>/dev/null)
+
+if [[ -z "$AGENT_CONTENT" ]]; then
   exit 0
 fi
 
@@ -80,6 +96,7 @@ fi
 # ==============================================================================
 JSON_SCHEMA='{
   "type": "object",
+  "additionalProperties": false,
   "properties": {
     "task": { "type": "string", "description": "Brief security testing objective" },
     "assumptions": {
@@ -89,6 +106,7 @@ JSON_SCHEMA='{
     },
     "target_analysis": {
       "type": "object",
+      "additionalProperties": false,
       "properties": {
         "application_purpose": { "type": "string", "description": "What the application does" },
         "identified_assumptions": {
@@ -111,6 +129,7 @@ JSON_SCHEMA='{
     },
     "objectives": {
       "type": "object",
+      "additionalProperties": false,
       "properties": {
         "primary": { "type": "array", "items": { "type": "string" }, "description": "Main security testing goals" },
         "supporting": { "type": "array", "items": { "type": "string" }, "description": "Enabler goals" }
@@ -119,6 +138,7 @@ JSON_SCHEMA='{
     },
     "dependencies": {
       "type": "object",
+      "additionalProperties": false,
       "properties": {
         "prerequisites": { "type": "array", "items": { "type": "string" }, "description": "Required before starting - scope confirmation, auth tokens, captures" },
         "constraints": { "type": "array", "items": { "type": "string" }, "description": "Scope boundaries, allowlisted domains, rate limits" },
@@ -129,8 +149,10 @@ JSON_SCHEMA='{
     },
     "atomic_actions": {
       "type": "array",
+      "minItems": 1,
       "items": {
         "type": "object",
+        "additionalProperties": false,
         "properties": {
           "step": { "type": "integer", "description": "Step number" },
           "phase": {
@@ -166,11 +188,13 @@ JSON_SCHEMA='{
     },
     "success_criteria": {
       "type": "object",
+      "additionalProperties": false,
       "properties": {
         "per_step": {
           "type": "array",
           "items": {
             "type": "object",
+            "additionalProperties": false,
             "properties": {
               "step": { "type": "integer" },
               "criterion": { "type": "string" },
@@ -221,11 +245,12 @@ START_TIME=$(date +%s.%N)
 } > "$DEBUG_LOG"
 
 # Execute claude with explicit 180-second timeout (hooks have 180s total)
-# Use structured JSON output via --json-schema
+# Use --setting-sources user to skip project hooks (prevents recursion)
+# NOTE: --settings flag breaks --json-schema (structured_output not populated)
 RESULT=$(cd "$PROJECT_DIR" && echo "$user_prompt" | timeout 180 claude -p \
   --model haiku \
   --output-format json \
-  --settings "$SETTINGS_FILE" \
+  --setting-sources user \
   --tools "Read" \
   --system-prompt-file "./.claude/agents/atom.md" \
   --json-schema "$JSON_SCHEMA" \
@@ -247,6 +272,33 @@ fi
 rm -f "$STDERR_FILE"
 
 # ==============================================================================
+# EXTRACT CLI RESPONSE FIELDS FOR DIAGNOSTICS
+# ==============================================================================
+IS_ERROR=$(echo "$RESULT" | jq -r '.is_error // "unknown"' 2>/dev/null)
+SUBTYPE=$(echo "$RESULT" | jq -r '.subtype // "unknown"' 2>/dev/null)
+HAS_STRUCTURED=$(echo "$RESULT" | jq 'has("structured_output")' 2>/dev/null)
+NUM_TURNS=$(echo "$RESULT" | jq -r '.num_turns // 0' 2>/dev/null)
+
+# Build diagnostic message
+DIAGNOSTIC=""
+if [[ "$EXIT_CODE" -ne 0 ]]; then
+  DIAGNOSTIC="**ERROR**: Exit code $EXIT_CODE (timeout=124, error=1)"
+elif [[ "$IS_ERROR" == "true" ]]; then
+  DIAGNOSTIC="**ERROR**: is_error=true - request failed"
+elif [[ "$SUBTYPE" != "success" ]]; then
+  DIAGNOSTIC="**WARNING**: subtype=$SUBTYPE (expected 'success')"
+elif [[ "$HAS_STRUCTURED" != "true" ]]; then
+  DIAGNOSTIC="**WARNING**: structured_output MISSING despite subtype=success. Possible causes: invalid schema syntax, --settings flag breaking --json-schema, schema too complex"
+fi
+
+# Check stderr for schema errors
+if [[ -n "$STDERR_CONTENT" ]]; then
+  if echo "$STDERR_CONTENT" | grep -qiE "schema|recursive|complex|unsupported|grammar"; then
+    DIAGNOSTIC="${DIAGNOSTIC}"$'\n'"**SCHEMA ERROR** in stderr"
+  fi
+fi
+
+# ==============================================================================
 # WRITE RESULTS TO FILES
 # ==============================================================================
 
@@ -260,11 +312,22 @@ rm -f "$STDERR_FILE"
   echo "|-------|-------|"
   echo "| Exit Code | $EXIT_CODE |"
   echo "| Duration | ${DURATION}s |"
+  echo "| is_error | $IS_ERROR |"
+  echo "| subtype | $SUBTYPE |"
+  echo "| num_turns | $NUM_TURNS |"
+  echo "| structured_output | $([ "$HAS_STRUCTURED" == "true" ] && echo "PRESENT" || echo "**MISSING**") |"
   echo "| Working Dir | $INIT_PWD |"
   echo "| Claude Path | $INIT_CLAUDE_PATH |"
   echo "| Agent File | $AGENT_FILE ($INIT_AGENT_SIZE bytes) |"
-  echo "| Settings File | $SETTINGS_FILE ($INIT_SETTINGS_EXISTS) |"
   echo ""
+  echo "## Memory Files"
+  echo -e "$INIT_MEMORY_FILES"
+  echo ""
+  if [[ -n "$DIAGNOSTIC" ]]; then
+    echo "## Diagnostics"
+    echo "$DIAGNOSTIC"
+    echo ""
+  fi
   echo "## User Prompt"
   echo '```'
   echo "$user_prompt"
@@ -285,34 +348,34 @@ rm -f "$STDERR_FILE"
   echo '```'
   echo ""
   echo "## Task JSON Extraction"
-  # Show what was extracted
   TASK_JSON_PREVIEW=""
-  if [[ $EXIT_CODE -eq 0 && -n "$RESULT" ]]; then
-    TASK_JSON=$(echo "$RESULT" | jq -r '.structured_output // empty' 2>/dev/null)
+  if [[ "$HAS_STRUCTURED" == "true" ]]; then
+    TASK_JSON=$(echo "$RESULT" | jq '.structured_output' 2>/dev/null)
     if [[ -n "$TASK_JSON" && "$TASK_JSON" != "null" ]]; then
       echo "**Source**: .structured_output field"
       TASK_JSON_PREVIEW="$TASK_JSON"
-    else
-      RAW_RESULT=$(echo "$RESULT" | jq -r '.result // empty' 2>/dev/null)
-      if [[ -n "$RAW_RESULT" ]]; then
-        CLEANED=$(echo "$RAW_RESULT" | awk '/^```json/,/^```$/' | sed '1d;$d')
-        TASK_JSON=$(echo "$CLEANED" | jq '.' 2>/dev/null)
-        if [[ -n "$TASK_JSON" && "$TASK_JSON" != "null" ]]; then
-          echo "**Source**: .result field (extracted from markdown fence)"
-          TASK_JSON_PREVIEW="$TASK_JSON"
-        else
-          echo "**ERROR**: Failed to extract JSON from .result field"
-          echo "Raw .result content (first 500 chars):"
-          echo '```'
-          echo "${RAW_RESULT:0:500}"
-          echo '```'
-        fi
+    fi
+  elif [[ $EXIT_CODE -eq 0 && -n "$RESULT" ]]; then
+    # Fallback: extract from .result field (markdown fence)
+    RAW_RESULT=$(echo "$RESULT" | jq -r '.result // empty' 2>/dev/null)
+    if [[ -n "$RAW_RESULT" ]]; then
+      CLEANED=$(echo "$RAW_RESULT" | awk '/^```json/,/^```$/' | sed '1d;$d')
+      TASK_JSON=$(echo "$CLEANED" | jq '.' 2>/dev/null)
+      if [[ -n "$TASK_JSON" && "$TASK_JSON" != "null" ]]; then
+        echo "**Source**: .result field (extracted from markdown fence) - FALLBACK"
+        TASK_JSON_PREVIEW="$TASK_JSON"
       else
-        echo "**ERROR**: No .structured_output or .result field found"
+        echo "**ERROR**: No structured_output AND failed to parse JSON from .result"
+        echo "Raw .result content (first 500 chars):"
+        echo '```'
+        echo "${RAW_RESULT:0:500}"
+        echo '```'
       fi
+    else
+      echo "**ERROR**: No structured_output AND no .result field"
     fi
   else
-    echo "**ERROR**: Exit code $EXIT_CODE or empty RESULT - skipping extraction"
+    echo "**ERROR**: Exit code $EXIT_CODE or empty RESULT"
   fi
   if [[ -n "$TASK_JSON_PREVIEW" ]]; then
     echo ""
@@ -323,27 +386,22 @@ rm -f "$STDERR_FILE"
   fi
 } > "$DEBUG_LOG"
 
-# Write structured output to task.md
-if [[ $EXIT_CODE -eq 0 && -n "$RESULT" ]]; then
-  # Try to extract from .structured_output first (if --json-schema worked)
-  TASK_JSON=$(echo "$RESULT" | jq -r '.structured_output // empty' 2>/dev/null)
-
-  # If not found, extract from .result field (which contains the plan as escaped JSON string)
-  if [[ -z "$TASK_JSON" || "$TASK_JSON" == "null" ]]; then
-    # Use -r to get raw string (unescape JSON string)
-    RAW_RESULT=$(echo "$RESULT" | jq -r '.result // empty' 2>/dev/null)
-    if [[ -n "$RAW_RESULT" ]]; then
-      # Extract JSON from markdown code fence (may have text before/after)
-      # Use awk to grab content between ```json and ```
-      CLEANED=$(echo "$RAW_RESULT" | awk '/^```json/,/^```$/' | sed '1d;$d')
-      # Parse and pretty-print the cleaned JSON
-      TASK_JSON=$(echo "$CLEANED" | jq '.' 2>/dev/null)
-    fi
-  fi
-
-  # Write valid JSON to task.md
+# Write structured output to task.json
+if [[ "$HAS_STRUCTURED" == "true" ]]; then
+  # Use structured_output directly
+  TASK_JSON=$(echo "$RESULT" | jq '.structured_output' 2>/dev/null)
   if [[ -n "$TASK_JSON" && "$TASK_JSON" != "null" ]]; then
     echo "$TASK_JSON" > "$TASK_FILE"
+  fi
+elif [[ $EXIT_CODE -eq 0 && -n "$RESULT" ]]; then
+  # Fallback: extract from .result field (markdown fence)
+  RAW_RESULT=$(echo "$RESULT" | jq -r '.result // empty' 2>/dev/null)
+  if [[ -n "$RAW_RESULT" ]]; then
+    CLEANED=$(echo "$RAW_RESULT" | awk '/^```json/,/^```$/' | sed '1d;$d')
+    TASK_JSON=$(echo "$CLEANED" | jq '.' 2>/dev/null)
+    if [[ -n "$TASK_JSON" && "$TASK_JSON" != "null" ]]; then
+      echo "$TASK_JSON" > "$TASK_FILE"
+    fi
   fi
 fi
 
