@@ -1,102 +1,34 @@
 #!/bin/bash
 
-# ==============================================================================
-# ATOMIZER HOOK - Penetration Testing Task Atomization via Claude Subagent
-# ==============================================================================
-# This hook intercepts user prompts and breaks them into atomic security testing
-# task plans using Claude's Structured Outputs (--json-schema) for guaranteed JSON.
-# Debug output goes to .claude/atomDebug.md (preserves previous output on skip)
-# ==============================================================================
+# Atomizer Hook - Opt-in query atomization via Claude subagent (pentest variant)
+# Prefix prompt with "ea " to enable. All other prompts skip instantly.
+# Debug: .claude/atomDebug.json | Output: .claude/memory/task.json
 
-# Determine paths FIRST before anything else
 PROJECT_DIR="${CLAUDE_PROJECT_DIR:-$(pwd)}"
-DEBUG_LOG="./.claude/atomDebug.md"
-TASK_FILE="./.claude/memory/task.json"
+TASK_FILE="$PROJECT_DIR/.claude/memory/task.json"
+DEBUG_FILE="$PROJECT_DIR/.claude/atomDebug.json"
 
-# ==============================================================================
-# Read Input BEFORE any debug file operations
-# ==============================================================================
+# 1. Read hook input
 input_json=$(cat)
-
-# Check if input is valid JSON
-if ! echo "$input_json" | jq -e '.' >/dev/null 2>&1; then
-  exit 0
-fi
-
+echo "$input_json" | jq -e '.' >/dev/null 2>&1 || exit 0
 user_prompt=$(echo "$input_json" | jq -r '.prompt // empty')
 
-if [[ -z "$user_prompt" ]]; then
-  # Write debug log even for empty prompts
-  {
-    echo "# Atomizer Debug Log - Empty Prompt"
-    echo "**$(date)**"
-    echo "Input JSON was empty or malformed"
-    echo "Raw input: ${input_json:0:200}"
-  } > "$DEBUG_LOG"
-  exit 0
-fi
+# 2. Only run when explicitly enabled with 'ea ' prefix
+[[ "$user_prompt" == ea\ * ]] || exit 0
+actual_prompt="${user_prompt#ea }"
+[[ -n "$actual_prompt" ]] || exit 0
 
-# ==============================================================================
-# Check Skip Conditions - DO NOT WRITE TO DEBUG LOG FOR NO-ATOM
-# ==============================================================================
-if [[ "$user_prompt" == no-atom* ]]; then
-  exit 0
-fi
-
-# ==============================================================================
-# Collect init info (don't log yet - will log at END)
-# ==============================================================================
-INIT_INPUT_LEN="${#input_json}"
-INIT_PROMPT_LEN="${#user_prompt}"
-INIT_PWD="$(pwd)"
-
-# ==============================================================================
-# Check Prerequisites (don't log yet)
-# ==============================================================================
-
-# Check if claude CLI exists
-if ! command -v claude &> /dev/null; then
-  exit 0
-fi
-INIT_CLAUDE_PATH="$(which claude)"
-
-# Check if agent file exists
-AGENT_FILE="./.claude/agents/atom.md"
-if [[ ! -f "$AGENT_FILE" ]]; then
-  exit 0
-fi
-INIT_AGENT_SIZE="$(wc -c < "$AGENT_FILE")"
-
-# Check if no-hooks settings exist
-SETTINGS_FILE="$PROJECT_DIR/.claude/no-hooks.json"
-INIT_SETTINGS_EXISTS="$([ -f "$SETTINGS_FILE" ] && echo "EXISTS" || echo "MISSING")"
-
-# Check memory files
-INIT_MEMORY_FILES=""
-for memfile in session.md hypotheses.md findings.md; do
-  filepath="./.claude/memory/$memfile"
-  if [[ -f "$filepath" ]]; then
-    INIT_MEMORY_FILES+="  - $memfile: EXISTS ($(wc -c < "$filepath") bytes)\n"
-  else
-    INIT_MEMORY_FILES+="  - $memfile: MISSING\n"
-  fi
-done
-
-# ==============================================================================
-# Read agent file
-# ==============================================================================
+# 3. Prerequisites
+command -v claude &>/dev/null || exit 0
+AGENT_FILE="$PROJECT_DIR/.claude/agents/atom.md"
+[[ -f "$AGENT_FILE" ]] || exit 0
 AGENT_CONTENT=$(cat "$AGENT_FILE" 2>/dev/null)
+[[ -n "$AGENT_CONTENT" ]] || exit 0
 
-if [[ -z "$AGENT_CONTENT" ]]; then
-  exit 0
-fi
-
-# ==============================================================================
-# Build JSON Schema
-# ==============================================================================
+# 4. JSON schema — pentest-specific with CAMRO phases, hypothesis tracking, evidence collection
+#    NOTE: additionalProperties:false silently breaks Claude Code CLI structured output — DO NOT ADD
 JSON_SCHEMA='{
   "type": "object",
-  "additionalProperties": false,
   "properties": {
     "task": { "type": "string", "description": "Brief security testing objective" },
     "assumptions": {
@@ -106,7 +38,6 @@ JSON_SCHEMA='{
     },
     "target_analysis": {
       "type": "object",
-      "additionalProperties": false,
       "properties": {
         "application_purpose": { "type": "string", "description": "What the application does" },
         "identified_assumptions": {
@@ -129,7 +60,6 @@ JSON_SCHEMA='{
     },
     "objectives": {
       "type": "object",
-      "additionalProperties": false,
       "properties": {
         "primary": { "type": "array", "items": { "type": "string" }, "description": "Main security testing goals" },
         "supporting": { "type": "array", "items": { "type": "string" }, "description": "Enabler goals" }
@@ -138,7 +68,6 @@ JSON_SCHEMA='{
     },
     "dependencies": {
       "type": "object",
-      "additionalProperties": false,
       "properties": {
         "prerequisites": { "type": "array", "items": { "type": "string" }, "description": "Required before starting - scope confirmation, auth tokens, captures" },
         "constraints": { "type": "array", "items": { "type": "string" }, "description": "Scope boundaries, allowlisted domains, rate limits" },
@@ -149,10 +78,8 @@ JSON_SCHEMA='{
     },
     "atomic_actions": {
       "type": "array",
-      "minItems": 1,
       "items": {
         "type": "object",
-        "additionalProperties": false,
         "properties": {
           "step": { "type": "integer", "description": "Step number" },
           "phase": {
@@ -184,17 +111,16 @@ JSON_SCHEMA='{
           }
         },
         "required": ["step", "phase", "type", "action", "input", "output", "depends_on"]
-      }
+      },
+      "minItems": 1
     },
     "success_criteria": {
       "type": "object",
-      "additionalProperties": false,
       "properties": {
         "per_step": {
           "type": "array",
           "items": {
             "type": "object",
-            "additionalProperties": false,
             "properties": {
               "step": { "type": "integer" },
               "criterion": { "type": "string" },
@@ -231,186 +157,39 @@ JSON_SCHEMA='{
   "required": ["task", "assumptions", "target_analysis", "objectives", "dependencies", "atomic_actions", "success_criteria"]
 }'
 
-# ==============================================================================
-# Execute Claude with Structured Outputs
-# ==============================================================================
-STDERR_FILE=$(mktemp)
-START_TIME=$(date +%s.%N)
-
-# Write initial debug marker to file BEFORE claude command
-{
-  echo "# Atomizer Debug Log"
-  echo "**$(date)** - Starting claude invocation"
-  echo "User prompt: $user_prompt"
-} > "$DEBUG_LOG"
-
-# Execute claude with explicit 180-second timeout (hooks have 180s total)
-# Use --setting-sources user to skip project hooks (prevents recursion)
-# NOTE: --settings flag breaks --json-schema (structured_output not populated)
-RESULT=$(cd "$PROJECT_DIR" && echo "$user_prompt" | timeout 180 claude -p \
-  --model haiku \
+# 5. Call opus in separate context
+RESULT=$(cd "$PROJECT_DIR" && echo "$actual_prompt" | timeout 180 claude -p \
+  --model opus \
   --output-format json \
-  --setting-sources user \
-  --tools "Read" \
-  --system-prompt-file "./.claude/agents/atom.md" \
-  --json-schema "$JSON_SCHEMA" \
-  2>"$STDERR_FILE")
-
+  --settings "$PROJECT_DIR/.claude/no-hooks.json" \
+  --system-prompt "$AGENT_CONTENT" \
+  --json-schema "$JSON_SCHEMA" 2>&1)
 EXIT_CODE=$?
-END_TIME=$(date +%s.%N)
-DURATION=$(echo "$END_TIME - $START_TIME" | bc 2>/dev/null || echo "unknown")
-STDERR_CONTENT=$(cat "$STDERR_FILE" 2>/dev/null)
 
-# If timeout occurred (exit code 124), add immediate debug note
-if [[ $EXIT_CODE -eq 124 ]]; then
-  {
-    echo ""
-    echo "**TIMEOUT: claude command exceeded 120-second limit at $(date)**"
-  } >> "$DEBUG_LOG"
-fi
+# 6. Write debug log (hook input + raw response)
+RESULT_JSON="$RESULT"
+echo "$RESULT" | jq -e '.' >/dev/null 2>&1 || RESULT_JSON='"'"$(echo "$RESULT" | head -c 2000)"'"'
+jq -n \
+  --arg ts "$(date -Iseconds)" \
+  --argjson hook_input "$input_json" \
+  --arg actual "$actual_prompt" \
+  --argjson response "$RESULT_JSON" \
+  --argjson exit_code "$EXIT_CODE" \
+  '{timestamp: $ts, hook_input: $hook_input, actual_prompt: $actual, response: $response, exit_code: $exit_code}' \
+  > "$DEBUG_FILE" 2>/dev/null
 
-rm -f "$STDERR_FILE"
-
-# ==============================================================================
-# EXTRACT CLI RESPONSE FIELDS FOR DIAGNOSTICS
-# ==============================================================================
-IS_ERROR=$(echo "$RESULT" | jq -r '.is_error // "unknown"' 2>/dev/null)
-SUBTYPE=$(echo "$RESULT" | jq -r '.subtype // "unknown"' 2>/dev/null)
-HAS_STRUCTURED=$(echo "$RESULT" | jq 'has("structured_output")' 2>/dev/null)
-NUM_TURNS=$(echo "$RESULT" | jq -r '.num_turns // 0' 2>/dev/null)
-
-# Build diagnostic message
-DIAGNOSTIC=""
-if [[ "$EXIT_CODE" -ne 0 ]]; then
-  DIAGNOSTIC="**ERROR**: Exit code $EXIT_CODE (timeout=124, error=1)"
-elif [[ "$IS_ERROR" == "true" ]]; then
-  DIAGNOSTIC="**ERROR**: is_error=true - request failed"
-elif [[ "$SUBTYPE" != "success" ]]; then
-  DIAGNOSTIC="**WARNING**: subtype=$SUBTYPE (expected 'success')"
-elif [[ "$HAS_STRUCTURED" != "true" ]]; then
-  DIAGNOSTIC="**WARNING**: structured_output MISSING despite subtype=success. Possible causes: invalid schema syntax, --settings flag breaking --json-schema, schema too complex"
-fi
-
-# Check stderr for schema errors
-if [[ -n "$STDERR_CONTENT" ]]; then
-  if echo "$STDERR_CONTENT" | grep -qiE "schema|recursive|complex|unsupported|grammar"; then
-    DIAGNOSTIC="${DIAGNOSTIC}"$'\n'"**SCHEMA ERROR** in stderr"
-  fi
-fi
-
-# ==============================================================================
-# WRITE RESULTS TO FILES
-# ==============================================================================
-
-# Write comprehensive debug log
-{
-  echo "# Atomizer Debug Log"
-  echo "**$(date)**"
-  echo ""
-  echo "## Execution Summary"
-  echo "| Field | Value |"
-  echo "|-------|-------|"
-  echo "| Exit Code | $EXIT_CODE |"
-  echo "| Duration | ${DURATION}s |"
-  echo "| is_error | $IS_ERROR |"
-  echo "| subtype | $SUBTYPE |"
-  echo "| num_turns | $NUM_TURNS |"
-  echo "| structured_output | $([ "$HAS_STRUCTURED" == "true" ] && echo "PRESENT" || echo "**MISSING**") |"
-  echo "| Working Dir | $INIT_PWD |"
-  echo "| Claude Path | $INIT_CLAUDE_PATH |"
-  echo "| Agent File | $AGENT_FILE ($INIT_AGENT_SIZE bytes) |"
-  echo ""
-  echo "## Memory Files"
-  echo -e "$INIT_MEMORY_FILES"
-  echo ""
-  if [[ -n "$DIAGNOSTIC" ]]; then
-    echo "## Diagnostics"
-    echo "$DIAGNOSTIC"
-    echo ""
-  fi
-  echo "## User Prompt"
-  echo '```'
-  echo "$user_prompt"
-  echo '```'
-  echo ""
-  echo "## stderr Output"
-  if [[ -n "$STDERR_CONTENT" ]]; then
-    echo '```'
-    echo "$STDERR_CONTENT"
-    echo '```'
-  else
-    echo "_No stderr output_"
-  fi
-  echo ""
-  echo "## stdout (Raw Response)"
-  echo '```json'
-  echo "$RESULT"
-  echo '```'
-  echo ""
-  echo "## Task JSON Extraction"
-  TASK_JSON_PREVIEW=""
-  if [[ "$HAS_STRUCTURED" == "true" ]]; then
-    TASK_JSON=$(echo "$RESULT" | jq '.structured_output' 2>/dev/null)
-    if [[ -n "$TASK_JSON" && "$TASK_JSON" != "null" ]]; then
-      echo "**Source**: .structured_output field"
-      TASK_JSON_PREVIEW="$TASK_JSON"
-    fi
-  elif [[ $EXIT_CODE -eq 0 && -n "$RESULT" ]]; then
-    # Fallback: extract from .result field (markdown fence)
-    RAW_RESULT=$(echo "$RESULT" | jq -r '.result // empty' 2>/dev/null)
-    if [[ -n "$RAW_RESULT" ]]; then
-      CLEANED=$(echo "$RAW_RESULT" | awk '/^```json/,/^```$/' | sed '1d;$d')
-      TASK_JSON=$(echo "$CLEANED" | jq '.' 2>/dev/null)
-      if [[ -n "$TASK_JSON" && "$TASK_JSON" != "null" ]]; then
-        echo "**Source**: .result field (extracted from markdown fence) - FALLBACK"
-        TASK_JSON_PREVIEW="$TASK_JSON"
-      else
-        echo "**ERROR**: No structured_output AND failed to parse JSON from .result"
-        echo "Raw .result content (first 500 chars):"
-        echo '```'
-        echo "${RAW_RESULT:0:500}"
-        echo '```'
-      fi
-    else
-      echo "**ERROR**: No structured_output AND no .result field"
-    fi
-  else
-    echo "**ERROR**: Exit code $EXIT_CODE or empty RESULT"
-  fi
-  if [[ -n "$TASK_JSON_PREVIEW" ]]; then
-    echo ""
-    echo "**Extracted JSON** (first 1000 chars):"
-    echo '```json'
-    echo "${TASK_JSON_PREVIEW:0:1000}"
-    echo '```'
-  fi
-} > "$DEBUG_LOG"
-
-# Write structured output to task.json
-if [[ "$HAS_STRUCTURED" == "true" ]]; then
-  # Use structured_output directly
-  TASK_JSON=$(echo "$RESULT" | jq '.structured_output' 2>/dev/null)
+# 7. Write task.json from structured_output
+if [[ $EXIT_CODE -eq 0 ]]; then
+  TASK_JSON=$(echo "$RESULT" | jq '.structured_output // empty' 2>/dev/null)
   if [[ -n "$TASK_JSON" && "$TASK_JSON" != "null" ]]; then
     echo "$TASK_JSON" > "$TASK_FILE"
   fi
-elif [[ $EXIT_CODE -eq 0 && -n "$RESULT" ]]; then
-  # Fallback: extract from .result field (markdown fence)
-  RAW_RESULT=$(echo "$RESULT" | jq -r '.result // empty' 2>/dev/null)
-  if [[ -n "$RAW_RESULT" ]]; then
-    CLEANED=$(echo "$RAW_RESULT" | awk '/^```json/,/^```$/' | sed '1d;$d')
-    TASK_JSON=$(echo "$CLEANED" | jq '.' 2>/dev/null)
-    if [[ -n "$TASK_JSON" && "$TASK_JSON" != "null" ]]; then
-      echo "$TASK_JSON" > "$TASK_FILE"
-    fi
-  fi
 fi
 
-# ==============================================================================
-# Return context to primary agent
-# ==============================================================================
+# 8. Return execution contract
 jq -n '{
   hookSpecificOutput: {
     hookEventName: "UserPromptSubmit",
-    additionalContext: "You MUST comply with the following requirements:\n\n1. You MUST read @.claude/memory/task.json IMMEDIATELY before proceeding\n2. You MUST NOT execute your own interpretation of the user request\n3. You MUST follow the atomic_actions array in exact dependency order (see depends_on field)\n4. You MUST NOT skip, reorder, or parallel-execute steps without explicit user approval\n5. You MUST validate each step against its success_criteria before marking complete\n6. You MUST update memory files (session.md, hypotheses.md, findings.md) after each major step\n7. You SHOULD use TodoWrite to track progress through the atomic steps\n8. You MUST NOT stop work until all steps are completed OR the user explicitly stops you\n\nThe task file contains:\n- Objectives (primary and supporting)\n- Dependencies (prerequisites, constraints, sequential/parallel execution)\n- Atomic steps with CAMRO phases (CAPTURE, ANALYZE, MUTATE, REPLAY, OBSERVE)\n- mitmdump commands for each step\n- Per-step validation requirements\n\nFailure to read this file before proceeding violates the task execution contract."
+    additionalContext: "You MUST comply with the following requirements:\n\n1. You MUST read @.claude/memory/task.json IMMEDIATELY before proceeding\n2. You MUST NOT execute your own interpretation of the user request\n3. You MUST follow the atomic_actions array in exact dependency order (see depends_on field)\n4. You MUST NOT skip, reorder, or parallel-execute steps without explicit user approval\n5. You MUST validate each step against its success_criteria before marking complete\n6. You MUST update memory files (session.md, hypotheses.md, findings.md) after each major step\n7. You SHOULD use TodoWrite to track progress through the atomic steps\n8. You MUST NOT stop work until all steps are completed OR the user explicitly stops you\n\nThe task file contains:\n- Target analysis (application purpose, assumptions, assumption gaps, attack surface)\n- Objectives (primary and supporting)\n- Dependencies (prerequisites, constraints, sequential/parallel execution)\n- Atomic steps with CAMRO phases (CAPTURE, ANALYZE, MUTATE, REPLAY, OBSERVE)\n- mitmdump commands and Python addons for each step\n- Hypothesis tracking for vulnerability theories\n- Per-step validation requirements\n- Evidence requirements for bug bounty reporting\n\nFailure to read this file before proceeding violates the task execution contract."
   }
 }'
