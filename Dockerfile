@@ -6,7 +6,7 @@ RUN apt-get update && apt-get install -y \
     curl ca-certificates gnupg \
     python3 python3-pip \
     netcat-openbsd dnsutils \
-    git jq bubblewrap \
+    git jq bubblewrap socat \
     && rm -rf /var/lib/apt/lists/*
 
 # Node.js 20 LTS
@@ -15,7 +15,7 @@ RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
     && rm -rf /var/lib/apt/lists/*
 
 # Claude Code + mitmproxy
-RUN npm install -g @anthropic-ai/claude-code \
+RUN npm install -g @anthropic-ai/claude-code @anthropic-ai/sandbox-runtime \
     && pip3 install --no-cache-dir mitmproxy
 
 # Non-root user
