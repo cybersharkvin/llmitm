@@ -1,107 +1,17 @@
-# =============================================================================
-# LLMitM Bug Bounty Hunter - Two-Container Architecture
-# =============================================================================
-# SECURITY MODEL:
-#   - .devcontainer/ and docker-compose.yml are at repo root (user controls infra)
-#   - mitmproxy-ai-tool/ is the agent's working directory (agent-visible)
-#   - Agent container CANNOT see container config or docker-compose.yml
-# =============================================================================
-
 services:
-  # =============================================================================
-  # FIREWALL SIDECAR - Controls all egress from llmitm container
-  # =============================================================================
-  firewall:
-    build:
-      context: .devcontainer/firewall
-      dockerfile: Dockerfile
-    container_name: llmitm-firewall
-    cap_add:
-      - NET_ADMIN
-      - NET_RAW
-    networks:
-      external:
-      internal:
-        ipv4_address: 172.28.0.2
-    environment:
-      - TARGET_IPS=${TARGET_IPS:-}
-      - TARGET_DOMAINS=${TARGET_DOMAINS:-}
-    sysctls:
-      - net.ipv4.ip_forward=1
-    restart: unless-stopped
-
-  # =============================================================================
-  # LLMITM - Bug bounty hunter agent (NO direct internet access)
-  # =============================================================================
-  llmitm:
-    build:
-      context: .devcontainer
-      dockerfile: Dockerfile
-    container_name: llmitm-agent
-    depends_on:
-      - firewall
-    # Run as non-root user (required for Claude Code --dangerously-skip-permissions)
-    user: "1000:1000"
-    # NO capabilities - agent cannot modify network
-    cap_drop:
-      - ALL
-    cap_add:
-      - NET_BIND_SERVICE  # Allow binding to ports < 1024 if needed
-    networks:
-      internal:
-        ipv4_address: 172.28.0.3
-    # Route all traffic through firewall container
-    dns:
-      - 172.28.0.2
-    environment:
-      - CLAUDE_API_KEY=${CLAUDE_API_KEY}
-      - MITMPROXY_PORT=${MITMPROXY_PORT:-8080}
-      # NOTE: No HTTP_PROXY needed - transparent proxy via routing (set by launch.sh)
-    volumes:
-      # =========================================================================
-      # SECURITY BOUNDARY: Agent only sees mitmproxy-ai-tool/ contents
-      # Agent CANNOT see: docker-compose.yml, .devcontainer/, or repo root files
-      # =========================================================================
-      # Workspace - mitmproxy-ai-tool directory only
-      - ./mitmproxy-ai-tool:/workspace
-      # Agent config - SELECTIVE PERMISSIONS
-      # READ-ONLY: Agent cannot modify hooks or permissions (security boundary)
-      - ./mitmproxy-ai-tool/.claude/hooks:/workspace/.claude/hooks:ro
-      - ./mitmproxy-ai-tool/.claude/no-hooks.json:/workspace/.claude/no-hooks.json:ro
-      - ./mitmproxy-ai-tool/.claude/settings.json:/workspace/.claude/settings.json:ro
-      # WRITABLE: Agent must update memory files and create addons
-      - ./mitmproxy-ai-tool/.claude/memory:/workspace/.claude/memory
-      - ./mitmproxy-ai-tool/.claude/agents:/workspace/.claude/agents
-      # Data volumes - writable for captures and certs
-      - llmitm-captures:/workspace/captures
-      - llmitm-certs:/workspace/certs
+  juiceshop:
+    image: bkimminich/juice-shop
     ports:
-      - "${MITMPROXY_PORT:-1337}:8080"
+      - "3000:3000"
+
+  llmitm:
+    build: .
+    volumes:
+      - ./mitmproxy-ai-tool:/workspace
+    environment:
+      - CLAUDE_API_KEY=${CLAUDE_API_KEY:-}
     working_dir: /workspace
     stdin_open: true
     tty: true
-    restart: unless-stopped
-
-# =============================================================================
-# NETWORKS
-# =============================================================================
-networks:
-  # External network - only firewall connects here
-  external:
-    driver: bridge
-
-  # Internal network - firewall intercepts traffic via iptables (not as gateway)
-  internal:
-    driver: bridge
-    internal: false  # Allow outbound (route injection sets firewall as gateway)
-    ipam:
-      config:
-        - subnet: 172.28.0.0/24
-          gateway: 172.28.0.1  # Docker bridge gateway (nsenter injects route to .2)
-
-# =============================================================================
-# VOLUMES
-# =============================================================================
-volumes:
-  llmitm-captures:
-  llmitm-certs:
+    depends_on:
+      - juiceshop

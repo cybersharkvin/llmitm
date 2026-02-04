@@ -57,7 +57,6 @@ certs/
 # Environment and Secrets
 # =============================================================================
 .env
-.devcontainer/targets.conf
 
 # =============================================================================
 # Upstream references (cloned repos)

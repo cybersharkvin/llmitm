@@ -24,7 +24,9 @@
         "*.claude.ai",
         "statsig.anthropic.com",
         "sentry.io",
-        "*.sentry.io"
+        "*.sentry.io",
+        "localhost",
+        "127.0.0.1"
       ]
     }
   }

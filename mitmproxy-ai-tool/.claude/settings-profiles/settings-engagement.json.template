@@ -1,4 +1,5 @@
 {
+  "_comment": "Copy to .claude/settings.json and replace TARGET placeholders with actual domains",
   "hooks": {
     "UserPromptSubmit": [
       {
@@ -24,7 +25,10 @@
         "*.claude.ai",
         "statsig.anthropic.com",
         "sentry.io",
-        "*.sentry.io"
+        "*.sentry.io",
+        "TARGET_DOMAIN_1",
+        "*.TARGET_DOMAIN_1",
+        "TARGET_DOMAIN_2"
       ]
     }
   }

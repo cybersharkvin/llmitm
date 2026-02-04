@@ -5,6 +5,8 @@
 #   1. Juice Shop running: docker run --rm -p 127.0.0.1:3000:3000 bkimminich/juice-shop
 #   2. mitmdump installed: pip install mitmproxy
 #   3. Claude Code installed
+#   4. settings.json has localhost in sandbox.network.allowedDomains
+#      (copy settings-profiles/settings-development.json if needed)
 #
 # Usage: ./llmitm-juiceshop.sh
 

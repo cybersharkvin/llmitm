@@ -2,7 +2,7 @@
 
 An autonomous bug bounty agent that demonstrates how to use LLMs correctly: leveraging terminal-native interfaces, structured memory as attention architecture, assumption-gap methodology, and semantic outsourcing to find vulnerabilities without the token overhead or reasoning degradation of traditional "AI security tools."
 
-Built for [OWASP Juice Shop](https://owasp.org/www-project-juice-shop/) and other intentionally vulnerable applications. 
+Built for [OWASP Juice Shop](https://owasp.org/www-project-juice-shop/) and other intentionally vulnerable applications.
 
 **WARNING** This is NOT your generic AI hypebro tool. This is a methodological proof-of-concept backed by fundamental LLM architecture.
 
@@ -10,24 +10,20 @@ Built for [OWASP Juice Shop](https://owasp.org/www-project-juice-shop/) and othe
 
 ## Tl;Dr:
 
-1. Run:
+1. Start everything:
 ```bash
-./launch.sh
+docker compose up -d
+docker compose exec llmitm claude
 ```
-2. Launch Claude & sign in:
-```bash
-claude --verbose --permission-mode plan --allow-dangerously-skip-permissions --system-prompt-file ./.claude/agents/llmitm.md
-```
-
-3. Paste:
+2. Paste:
 ```
 @CLAUDE.md we are beginning an initial hunt against the juice shop container. You MUST proceed with initial baselining and subsequent execution of the CAMRO workflow using the mitmdump CLI @docs/CLAUDE.md.
 
 **You MUST update memory files regularly @.claude/memory/**
 
-TARGET="http://172.19.0.3:3000"
+TARGET="http://juiceshop:3000"
 ```
-4. Become 1337 h4ck3r
+3. Become 1337 h4ck3r
 
 ---
 
@@ -83,14 +79,16 @@ The gap is the bug.
 **Why It Works**: Logic flaws that evade signature-based scanners are caught because you're testing the *boundaries of assumptions*, not patterns.
 
 ### 6. Capability-Based Isolation
-**The Model**: Two containers. Agent has full autonomy inside a sandbox it cannot escape or observe.
+**The Model**: Claude Code's sandbox. Agent has full autonomy inside OS-level isolation it cannot escape.
 
 **The Reality**:
-- Agent container: no NET_ADMIN, no direct internet, no visibility into infrastructure files
-- Firewall container: has NET_ADMIN + internet access, controls all egress via SNI proxy
+- Sandbox enforces domain allowlist via proxy (HTTP_PROXY/HTTPS_PROXY)
+- Filesystem writes restricted to working directory (bubblewrap/Seatbelt)
+- `allowUnsandboxedCommands: false` — escape hatch disabled
+- Settings not hot-reloaded — agent cannot modify its own boundaries mid-session
 - Agent can run with `--dangerously-skip-permissions` safely
 
-**Why This Matters**: Maximum agency + enforced boundaries. Deployable where other autonomous tools aren't allowed because the architecture *proves* confinement.
+**Why This Matters**: Maximum agency + enforced boundaries. No Docker required. Deployable anywhere Claude Code runs.
 
 ### 7. Structured Output Enforcement
 **The Problem**: LLM reasoning chains are invisible. You can't audit why it chose endpoint A over endpoint B.
@@ -111,29 +109,32 @@ Required fields in every output:
 ## Architecture Overview
 
 ```
-┌────────────────────────────────────────────────────────────────────────────┐
-│ Docker Compose                                                             │
-│                                                                            │
-│  ┌─────────────────┐        ┌───────────────────────────────────────────┐  │
-│  │ firewall        │        │ llmitm                                    │  │
-│  │ (SNI proxy)     │◄──────►│ (claude + mitmproxy)                      │  │
-│  │                 │        │                                           │  │
-│  │ ✓ Internet      │        │ ✗ No internet access                      │  │
-│  │ ✓ Allowlist     │        │ ✗ No NET_ADMIN capability                 │  │
-│  │ ✓ NET_ADMIN     │        │ ✓ Full agent autonomy inside              │  │
-│  │ ✓ SNI parser    │        │ ✓ Memory files + documentation            │  │
-│  └────────┬────────┘        └───────────────────────────────────────────┘  │
-│           │                             │                                  │
-│      external                      internal                                │
-│      network                       network (isolated)                      │
-└───────────┼─────────────────────────────┼──────────────────────────────────┘
-            │                             │
-            ▼                             ▼
-        Internet                 Transparent routing
-    (Claude API + targets)       (via firewall gateway)
+┌────────────────────────────────────────────────────┐
+│ Claude Code Sandbox (bubblewrap / Seatbelt)        │
+│                                                     │
+│  ┌─────────────────────────────────────────────┐   │
+│  │ llmitm agent                                 │   │
+│  │ (claude + mitmproxy)                         │   │
+│  │                                              │   │
+│  │ Filesystem: writes restricted to cwd         │   │
+│  │ Network: only allowedDomains reachable       │   │
+│  │ Escape hatch: disabled                       │   │
+│  └──────────────────────────────────────────────┘   │
+│                         │                           │
+│                 HTTP_PROXY / HTTPS_PROXY             │
+│                         │                           │
+│              ┌──────────┴──────────┐                │
+│              │ Claude Code Proxy    │                │
+│              │ (domain filtering)   │                │
+│              └──────────┬──────────┘                │
+└─────────────────────────┼───────────────────────────┘
+                          │
+                          ▼
+                  Allowed domains only
+           (Claude API + configured targets)
 ```
 
-**Transparent Proxy**: Agent traffic routes through firewall via injected gateway. Firewall intercepts HTTP (port 80) and HTTPS (port 443). **HTTP**: reads Host header. **HTTPS**: reads SNI from TLS ClientHello—**no TLS decryption**. Agent needs zero proxy configuration.
+**Proxy-Based Isolation**: Claude Code sets `HTTP_PROXY`/`HTTPS_PROXY` environment variables. All child processes (mitmdump, curl) inherit the proxy. The proxy enforces `allowedDomains` from `settings.json`. Local operations (file I/O, port binding, loopback) are unaffected.
 
 ---
 
@@ -157,7 +158,7 @@ Primary agent receives pre-primed context
 
 The atomizer understands your project state via memory files, using this to prime attention heads toward what matters; resulting in the same context-aware (often better!) reasoning that your primary agent would typically do. This is semantic outsourcing: smaller model does reasoning-about-what-matters, primary model does execution.
 
-### Phase 2: Execution 
+### Phase 2: Execution
 
 ```
 Agent reads task.json
@@ -232,40 +233,99 @@ Each file is a context silo. The atomizer reads all three and outputs task plans
 
 ## Quick Start
 
-### Prerequisites
-- Docker Desktop or Docker Engine
+### Docker (Recommended)
 
----
-
-### One Command Setup
+Starts Juice Shop + the agent container in one command:
 
 ```bash
-./launch.sh
+# Set your API key
+cp .env.example .env
+# Edit .env → add CLAUDE_API_KEY (or leave blank for OAuth)
+
+# Launch
+docker compose up -d
+docker compose exec llmitm claude
 ```
 
-The script automatically:
-1. Detects or creates a Juice Shop container
-2. Extracts its IP address
-3. Configures `.env` with the target
-4. Launches firewall + agent containers
-5. Drops you into the agent shell
+The development settings profile (`settings-development.json`) is pre-configured for local targets including Juice Shop.
+
+### Manual Install (No Docker)
+
+If you prefer running directly on host:
+
+```bash
+# Prerequisites
+pip install mitmproxy
+npm install -g @anthropic-ai/claude-code
+# Linux only: sudo apt install bubblewrap
+
+# Configure targets
+cp mitmproxy-ai-tool/.claude/settings-profiles/settings-development.json \
+   mitmproxy-ai-tool/.claude/settings.json
+
+# Launch
+cd mitmproxy-ai-tool
+claude
+```
+
+For non-Juice-Shop targets, edit `mitmproxy-ai-tool/.claude/settings.json` and add domains to `sandbox.network.allowedDomains`.
 
 ---
 
-### Launch Claude with Full Autonomy
+### Configure Targets
+
+Edit `mitmproxy-ai-tool/.claude/settings.json`, add target domains to `sandbox.network.allowedDomains`:
+
+```json
+{
+  "sandbox": {
+    "network": {
+      "allowedDomains": [
+        "api.anthropic.com", "*.anthropic.com",
+        "claude.ai", "*.claude.ai",
+        "statsig.anthropic.com", "sentry.io", "*.sentry.io",
+        "api.target.com",
+        "cdn.target.com"
+      ]
+    }
+  }
+}
+```
+
+Or copy a profile:
+```bash
+cp mitmproxy-ai-tool/.claude/settings-profiles/settings-development.json \
+   mitmproxy-ai-tool/.claude/settings.json
+```
+
+### Settings Profiles
+
+| Profile | Use Case |
+|---------|----------|
+| `settings-lockdown.json` | Analysis only — Claude API, no targets |
+| `settings-engagement.json.template` | Active engagement — replace TARGET placeholders |
+| `settings-development.json` | Local targets (Juice Shop, localhost) |
+| `settings-docker.json` | Docker deployment (weaker nested sandbox) |
+
+---
+
+### Launch Flags
+
+When launching Claude manually (not via `docker compose exec`):
 
 ```bash
+cd mitmproxy-ai-tool
 claude --verbose \
        --permission-mode plan \
-       --allow-dangerously-skip-permissions \
        --system-prompt-file ./.claude/agents/llmitm.md
 ```
 
 **Flag explanations:**
 - `--verbose` — Shows thinking cycles and token expenditure. Watch the atomizer's reasoning.
 - `--permission-mode plan` — Starts in plan mode. Atomizer runs first (structured decomposition), then agent executes.
-- `--allow-dangerously-skip-permissions` — Full autonomy. Safe here because network isolation is enforced by the container architecture, not permissions.
 - `--system-prompt-file ./.claude/agents/llmitm.md` — Direct prompt loading. Avoids the `--agent llmitm` flag which causes context bleed with the atomizer hook.
+
+Safe to use `--dangerously-skip-permissions` — sandbox enforces containment, not permissions.
 
 ---
 
@@ -280,7 +340,7 @@ Reference @.claude/memory/ for state, @docs/ for documentation.
 
 You MUST update memory files (session.md, hypotheses.md, findings.md) after each phase.
 
-TARGET="http://172.19.0.3:3000"
+TARGET="http://juiceshop:3000"
 ```
 
 The agent will:
@@ -295,47 +355,39 @@ The agent will:
 ## Project Structure
 
 ```
-llmitm/                              # Repository root (infrastructure)
-├── README.md                        # Original README
-├── README_v2.md                     # This file (design philosophy edition)
-├── docker-compose.yml               # Two-container orchestration
-├── launch.sh                        # Setup automation
-├── cleanup.sh                       # Teardown
-├── .env.example                     # Config template
-├── .devcontainer/
-│   ├── devcontainer.json            # VS Code integration
-│   ├── Dockerfile                   # Agent container
-│   └── firewall/
-│       ├── Dockerfile               # SNI proxy container (Python 3.11)
-│       ├── entrypoint.sh            # iptables + proxy startup
-│       ├── requirements.txt         # pydantic
-│       └── proxy/                   # SNI proxy implementation
-│           ├── models.py            # Config models
-│           ├── sni_parser.py        # TLS ClientHello parsing
-│           └── sni_proxy.py         # Asyncio transparent proxy
+llmitm/
+├── README.md                        # This file
+├── Dockerfile                       # Container build
+├── docker-compose.yml               # Orchestrator (Juice Shop + agent)
+├── .env.example                     # API key config
 │
-└── mitmproxy-ai-tool/               # Agent workspace (/workspace in container)
+└── mitmproxy-ai-tool/               # Agent workspace
     ├── .claude/
     │   ├── agents/
     │   │   └── llmitm.md            # Agent system prompt
     │   ├── hooks/
-    │   │   └── query-atomization.sh # Atomizer hook (runs Haiku)
+    │   │   └── query-atomization.sh # Atomizer hook
     │   ├── memory/
     │   │   ├── session.md           # Operational state
     │   │   ├── hypotheses.md        # Test theories + failures
     │   │   └── findings.md          # Proven vulnerabilities
-    │   └── settings.json            # Tool permissions
+    │   ├── settings.json            # Sandbox + hooks (PRIMARY security config)
+    │   └── settings-profiles/       # Pre-built profiles
+    │       ├── settings-lockdown.json
+    │       ├── settings-engagement.json.template
+    │       ├── settings-development.json
+    │       └── settings-docker.json
     ├── captures/                    # Traffic files (.mitm)
     ├── certs/                       # mitmproxy CA certificates
     ├── CLAUDE.md                    # Agent playbook (cross-linked)
     ├── mitmdump-cheatsheet.md       # CLI reference
-    ├── docs/
-    │   ├── CLAUDE.md                # Hub for documentation
-    │   └── [deeper guides]
-    └── README.md
+    ├── llmitm-juiceshop.sh          # Juice Shop launcher
+    └── docs/
+        ├── CLAUDE.md                # Hub for documentation
+        └── [deeper guides]
 ```
 
-**Boundary**: `llmitm/` (root) = infrastructure. `mitmproxy-ai-tool/` = agent's visible workspace. Agent cannot see docker-compose.yml, .devcontainer/, or .env.
+**Security boundary**: `settings.json` controls what domains are reachable. Sandbox enforces this at OS level.
 
 ---
 
@@ -343,28 +395,34 @@ llmitm/                              # Repository root (infrastructure)
 
 ### Target Allowlist
 
-Edit `.env` at repo root:
+Edit `mitmproxy-ai-tool/.claude/settings.json`:
 
-```bash
-# Single target
-TARGET_DOMAINS=172.17.0.2
-
-# Multiple targets (comma-separated)
-TARGET_DOMAINS=api.target.com,app.target.com
-
-# Direct IPs
-TARGET_IPS=192.168.1.100,10.0.0.0/24
+```json
+{
+  "sandbox": {
+    "network": {
+      "allowedDomains": [
+        "api.anthropic.com", "*.anthropic.com",
+        "claude.ai", "*.claude.ai",
+        "statsig.anthropic.com", "sentry.io", "*.sentry.io",
+        "api.target.com",
+        "cdn.target.com"
+      ]
+    }
+  }
+}
 ```
 
-**Always allowed**:
+**Always allowed** (required by Claude Code):
 - `api.anthropic.com` — Claude API
 - `claude.ai` — Claude API
 - `statsig.anthropic.com` — Telemetry
+- `sentry.io` — Error reporting
 
 ### Verify Network Isolation
 
 ```bash
-# From inside llmitm container:
+# From inside Claude session:
 
 # Should SUCCEED (Claude API)
 curl -I https://api.anthropic.com
@@ -372,6 +430,19 @@ curl -I https://api.anthropic.com
 # Should FAIL (not allowlisted)
 curl -I https://google.com
 ```
+
+---
+
+## Docker Details
+
+Docker handles **deployment** (install deps + start Juice Shop). Sandbox handles **security** (network isolation, filesystem jail). Two different jobs.
+
+```bash
+docker compose up -d        # Starts Juice Shop + agent container
+docker compose exec llmitm claude  # Enter the agent
+```
+
+The Docker settings profile (`settings-docker.json`) enables `enableWeakerNestedSandbox: true` since bubblewrap has limited capabilities inside Docker.
 
 ---
 
@@ -491,38 +562,25 @@ Report findings to `findings.md` with reproducible commands.
 
 ---
 
-## Viewing Firewall Logs
+## Migrating from v1.0 (Docker Architecture)
 
-```bash
-# From repo root
-docker-compose logs firewall
-
-# Real-time
-docker-compose logs -f firewall
-```
-
-SNI proxy logs show `[ALLOW]` and `[BLOCK]` with timestamps and domains.
+1. `TARGET_DOMAINS` from `.env` → `allowedDomains` in `settings.json`
+2. `./launch.sh` → `docker compose up -d && docker compose exec llmitm claude`
+3. Docker two-container setup (firewall sidecar) → Single container + sandbox
+4. Rollback: `git checkout v1.0-final`
 
 ---
 
 ## Troubleshooting
 
-### Agent can't reach Claude API
-```bash
-# Check firewall is running
-docker-compose ps
-
-# Check logs for [BLOCK] entries
-docker-compose logs firewall
-
-# Test from inside container
-curl -v https://api.anthropic.com
-```
-
 ### Agent can't reach target
-1. Verify target in `.env`: `grep TARGET .env`
-2. Restart firewall: `docker-compose restart firewall`
-3. Check logs: `docker-compose logs firewall | grep BLOCK`
+1. Check `allowedDomains` in `settings.json`
+2. Restart Claude Code session (settings not hot-reloaded)
+3. Verify sandbox is enabled: look for proxy env vars in Bash output
+
+### Sandbox not working (Linux)
+1. Check bubblewrap: `which bwrap`
+2. Install: `sudo apt install bubblewrap`
 
 ### Atomizer not running
 Check `.claude/hooks/query-atomization.sh` has execute permission:
@@ -549,7 +607,7 @@ Designed for **authorized security testing only**:
 - Security research (your own applications)
 - CTF competitions and training
 
-The two-container architecture prevents accidental scope creep. The agent can only reach allowlisted targets and cannot see infrastructure configuration.
+The Claude Code sandbox prevents accidental scope creep. The agent can only reach allowlisted targets via OS-level proxy enforcement.
 
 ---
 
