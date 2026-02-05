@@ -89,6 +89,15 @@ if [[ "$(uname)" == "Linux" ]]; then
     fi
 fi
 
+# tmux (persistent sessions for background proxy processes)
+if command -v tmux &>/dev/null; then
+    ok "tmux"
+else
+    warn "tmux not found. Installing..."
+    sudo apt-get install -y tmux 2>/dev/null || brew install tmux 2>/dev/null
+    ok "tmux installed"
+fi
+
 # sandbox-runtime (seccomp filter for Claude Code sandbox)
 if npm list -g @anthropic-ai/sandbox-runtime &>/dev/null; then
     ok "sandbox-runtime (seccomp filter)"

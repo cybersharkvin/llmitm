@@ -57,6 +57,32 @@ mitmdump --mode upstream:$HTTP_PROXY -C captures/mutated.mitm --flow-detail 3
 # mitmdump -C captures/mutated.mitm # can't reach target
 ```
 
+### Persistent Proxy with tmux
+
+Background processes don't survive between Bash tool calls. Use tmux for a persistent mitmdump proxy:
+
+**Start proxy session:**
+```bash
+tmux new-session -d -s mitm 'mitmdump --mode upstream:$HTTP_PROXY -p 9080 -w captures/session.mitm -k'
+```
+
+**Use proxy (in separate Bash calls):**
+```bash
+curl -x http://localhost:9080 http://juiceshop:3000/api/Products
+```
+
+**Check proxy output:**
+```bash
+tmux capture-pane -t mitm -p | tail -20
+```
+
+**Stop proxy:**
+```bash
+tmux kill-session -t mitm
+```
+
+**Why tmux?** Each Bash tool invocation is a separate shell process. Background processes (`&`) started in one call don't persist to the next. tmux creates a persistent session that survives shell exits.
+
 ---
 
 ## Quick Reference
