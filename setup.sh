@@ -78,6 +78,26 @@ if [[ "$(uname)" == "Linux" ]]; then
     fi
 fi
 
+# socat (Linux only — needed for sandbox socket bridges)
+if [[ "$(uname)" == "Linux" ]]; then
+    if command -v socat &>/dev/null; then
+        ok "socat"
+    else
+        warn "socat not found. Installing..."
+        sudo apt-get install -y socat
+        ok "socat installed"
+    fi
+fi
+
+# sandbox-runtime (seccomp filter for Claude Code sandbox)
+if npm list -g @anthropic-ai/sandbox-runtime &>/dev/null; then
+    ok "sandbox-runtime (seccomp filter)"
+else
+    warn "sandbox-runtime not found. Installing..."
+    npm install -g @anthropic-ai/sandbox-runtime
+    ok "sandbox-runtime installed"
+fi
+
 # Docker
 if command -v docker &>/dev/null; then
     ok "Docker $(docker --version 2>&1 | awk '{print $3}' | tr -d ',')"
