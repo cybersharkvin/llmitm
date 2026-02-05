@@ -43,12 +43,18 @@ else
     errors=$((errors + 1))
 fi
 
-# mitmproxy
-if python3 -c "import mitmproxy" &>/dev/null; then
+# mitmproxy (via pipx to avoid PEP 668 on modern distros)
+if command -v mitmdump &>/dev/null; then
     ok "mitmproxy $(mitmdump --version 2>&1 | head -1 | awk '{print $2}')"
 else
-    warn "mitmproxy not found. Installing..."
-    pip3 install mitmproxy
+    warn "mitmproxy not found. Installing via pipx..."
+    if ! command -v pipx &>/dev/null; then
+        sudo apt-get install -y pipx 2>/dev/null || pip3 install --user pipx
+        pipx ensurepath
+    fi
+    pipx install mitmproxy
+    # Ensure pipx bin dir is on PATH for the rest of this script
+    export PATH="$HOME/.local/bin:$PATH"
     ok "mitmproxy installed: $(mitmdump --version 2>&1 | head -1 | awk '{print $2}')"
 fi
 
