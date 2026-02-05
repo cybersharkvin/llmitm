@@ -94,7 +94,7 @@ if npm list -g @anthropic-ai/sandbox-runtime &>/dev/null; then
     ok "sandbox-runtime (seccomp filter)"
 else
     warn "sandbox-runtime not found. Installing..."
-    npm install -g @anthropic-ai/sandbox-runtime
+    sudo npm install -g @anthropic-ai/sandbox-runtime
     ok "sandbox-runtime installed"
 fi
 
