@@ -240,7 +240,7 @@ If you prefer to set up manually:
 ```bash
 # 1. Install prerequisites
 pip install mitmproxy
-npm install -g @anthropic-ai/claude-code
+curl -fsSL https://claude.ai/install.sh | sh
 # Linux only: sudo apt install bubblewrap
 
 # 2. Add /etc/hosts entry for Juice Shop

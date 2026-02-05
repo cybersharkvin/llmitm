@@ -47,16 +47,18 @@ fi
 if python3 -c "import mitmproxy" &>/dev/null; then
     ok "mitmproxy $(mitmdump --version 2>&1 | head -1 | awk '{print $2}')"
 else
-    fail "mitmproxy not found. Install: pip3 install mitmproxy"
-    errors=$((errors + 1))
+    warn "mitmproxy not found. Installing..."
+    pip3 install mitmproxy
+    ok "mitmproxy installed: $(mitmdump --version 2>&1 | head -1 | awk '{print $2}')"
 fi
 
 # Claude Code
 if command -v claude &>/dev/null; then
     ok "Claude Code $(claude --version 2>/dev/null || echo '(version unknown)')"
 else
-    fail "Claude Code not found. Install: npm install -g @anthropic-ai/claude-code"
-    errors=$((errors + 1))
+    warn "Claude Code not found. Installing via native installer..."
+    curl -fsSL https://claude.ai/install.sh | sh
+    ok "Claude Code installed"
 fi
 
 # bubblewrap (Linux only)
@@ -64,8 +66,9 @@ if [[ "$(uname)" == "Linux" ]]; then
     if command -v bwrap &>/dev/null; then
         ok "bubblewrap (bwrap)"
     else
-        fail "bubblewrap not found. Install: sudo apt install bubblewrap"
-        errors=$((errors + 1))
+        warn "bubblewrap not found. Installing..."
+        sudo apt-get install -y bubblewrap
+        ok "bubblewrap installed"
     fi
 fi
 
@@ -79,7 +82,7 @@ fi
 
 if [ "$errors" -gt 0 ]; then
     echo ""
-    fail "$errors missing dependency(ies). Install them and re-run this script."
+    fail "$errors missing dependency(ies) that cannot be auto-installed. Fix them and re-run."
     exit 1
 fi
 
