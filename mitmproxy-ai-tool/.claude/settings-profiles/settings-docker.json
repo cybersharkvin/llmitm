@@ -26,6 +26,7 @@
         "statsig.anthropic.com",
         "sentry.io",
         "*.sentry.io",
+        "juiceshop",
         "localhost",
         "127.0.0.1"
       ]

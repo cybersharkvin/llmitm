@@ -10,8 +10,12 @@ services:
       - ./mitmproxy-ai-tool:/workspace
     environment:
       - CLAUDE_API_KEY=${CLAUDE_API_KEY:-}
-    working_dir: /workspace
     stdin_open: true
     tty: true
+    cap_add:
+      - SYS_ADMIN
+    security_opt:
+      - apparmor:unconfined
+      - seccomp:unconfined
     depends_on:
       - juiceshop

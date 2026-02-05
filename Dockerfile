@@ -18,8 +18,8 @@ RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
 RUN npm install -g @anthropic-ai/claude-code @anthropic-ai/sandbox-runtime \
     && pip3 install --no-cache-dir mitmproxy
 
-# Non-root user
+# User for Claude Code (container runs as root for bwrap namespace creation;
+# Claude Code's sandbox handles privilege isolation internally)
 RUN useradd -m -s /bin/bash -u 1000 llmitm
-USER llmitm
 WORKDIR /workspace
 CMD ["bash"]

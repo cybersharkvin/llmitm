@@ -238,11 +238,7 @@ Each file is a context silo. The atomizer reads all three and outputs task plans
 Starts Juice Shop + the agent container in one command:
 
 ```bash
-# Set your API key
-cp .env.example .env
-# Edit .env → add CLAUDE_API_KEY (or leave blank for OAuth)
-
-# Launch
+export CLAUDE_API_KEY=your-key   # or skip for OAuth login
 docker compose up -d
 docker compose exec llmitm claude
 ```
