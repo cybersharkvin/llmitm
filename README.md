@@ -12,8 +12,9 @@ Built for [OWASP Juice Shop](https://owasp.org/www-project-juice-shop/) and othe
 
 1. Start everything:
 ```bash
-docker compose up -d
-docker compose exec llmitm claude
+./setup.sh
+export CLAUDE_API_KEY=sk-ant-...
+cd mitmproxy-ai-tool && claude
 ```
 2. Paste:
 ```
@@ -109,32 +110,23 @@ Required fields in every output:
 ## Architecture Overview
 
 ```
-┌────────────────────────────────────────────────────┐
-│ Claude Code Sandbox (bubblewrap / Seatbelt)        │
-│                                                     │
-│  ┌─────────────────────────────────────────────┐   │
-│  │ llmitm agent                                 │   │
-│  │ (claude + mitmproxy)                         │   │
-│  │                                              │   │
-│  │ Filesystem: writes restricted to cwd         │   │
-│  │ Network: only allowedDomains reachable       │   │
-│  │ Escape hatch: disabled                       │   │
-│  └──────────────────────────────────────────────┘   │
-│                         │                           │
-│                 HTTP_PROXY / HTTPS_PROXY             │
-│                         │                           │
-│              ┌──────────┴──────────┐                │
-│              │ Claude Code Proxy    │                │
-│              │ (domain filtering)   │                │
-│              └──────────┬──────────┘                │
-└─────────────────────────┼───────────────────────────┘
-                          │
-                          ▼
-                  Allowed domains only
-           (Claude API + configured targets)
+Host OS (Linux/macOS)
+├── Docker (only runs Juice Shop)
+│   └── juiceshop container (port 3000 → host)
+│
+├── /etc/hosts: 127.0.0.1 juiceshop
+│
+└── Claude Code (host-native)
+    └── bwrap sandbox (Linux) or Seatbelt (macOS)
+        ├── Network namespace (loopback + socat bridges only)
+        ├── HTTP_PROXY → socat → proxy on host
+        ├── allowedDomains: [juiceshop, api.anthropic.com, ...]
+        └── mitmproxy-ai-tool/ (working directory)
 ```
 
-**Proxy-Based Isolation**: Claude Code sets `HTTP_PROXY`/`HTTPS_PROXY` environment variables. All child processes (mitmdump, curl) inherit the proxy. The proxy enforces `allowedDomains` from `settings.json`. Local operations (file I/O, port binding, loopback) are unaffected.
+**Host-Native Sandbox**: Claude Code runs directly on the host OS. Its sandbox (bubblewrap on Linux, Seatbelt on macOS) creates an isolated environment with `HTTP_PROXY`/`HTTPS_PROXY` enforcing `allowedDomains` from `settings.json`. Docker's only job is running Juice Shop on port 3000. The `/etc/hosts` entry (`127.0.0.1 juiceshop`) lets the sandbox proxy resolve the hostname to localhost, where Docker port-maps to the Juice Shop container.
+
+**Why a hostname, not an IP**: The sandbox's NO_PROXY list contains IP ranges (`172.16.0.0/12`, `10.0.0.0/8`, etc.). If you used a Docker container IP like `172.17.0.2`, curl would bypass the proxy and fail inside the network namespace. The hostname `juiceshop` avoids NO_PROXY matching, routes through the proxy, and resolves via the host's `/etc/hosts`.
 
 ---
 
@@ -199,20 +191,18 @@ Each phase is a "fresh start" that operates on accumulated project knowledge. Th
 ## The Five-Phase CAMRO Workflow
 
 ```
-CAPTURE  → mitmdump -w traffic.mitm "~d target.com"
-           (Intercept live traffic)
+CAPTURE  → curl http://juiceshop:3000/api/...       (respects HTTP_PROXY automatically)
+           mitmdump --mode upstream:$HTTP_PROXY -p 8080 -w traffic.mitm &
+           curl -x localhost:8080 http://juiceshop:3000/...  (richer .mitm capture)
 
-ANALYZE  → mitmdump -nr traffic.mitm --flow-detail 3
-           (Identify endpoints, patterns, authentication)
+ANALYZE  → mitmdump -nr traffic.mitm --flow-detail 3  (offline, no network)
 
-MUTATE   → mitmdump -nr traffic.mitm -B "/user_id=1/user_id=2" -w test.mitm
-           (Modify requests to test hypotheses)
+MUTATE   → mitmdump -nr traffic.mitm -B "/user_id=1/user_id=2" -w test.mitm  (offline)
 
-REPLAY   → mitmdump -C test.mitm --flow-detail 3
-           (Send mutated requests, observe responses)
+REPLAY   → curl with mutated params http://juiceshop:3000/...  (respects HTTP_PROXY)
+           mitmdump --mode upstream:$HTTP_PROXY -C test.mitm --flow-detail 3
 
 OBSERVE  → Analyze responses for vulnerability indicators
-           (Confirm hypotheses, document evidence)
 ```
 
 Each phase writes to memory files. Hypotheses are formulated based on assumption gaps. Tests target specific assumption divergences, not *just* patterns that appear in training data.
@@ -233,33 +223,33 @@ Each file is a context silo. The atomizer reads all three and outputs task plans
 
 ## Quick Start
 
-### Docker (Recommended)
+### Setup (Recommended)
 
-Starts Juice Shop + the agent container in one command:
+The setup script checks dependencies, configures `/etc/hosts`, and starts Juice Shop:
 
 ```bash
-export CLAUDE_API_KEY=your-key   # or skip for OAuth login
-docker compose up -d
-docker compose exec llmitm claude
+./setup.sh                        # checks deps, adds /etc/hosts, starts Juice Shop
+export CLAUDE_API_KEY=sk-ant-...  # or skip for OAuth login
+cd mitmproxy-ai-tool && claude
 ```
 
-The development settings profile (`settings-development.json`) is pre-configured for local targets including Juice Shop.
+### Manual Setup
 
-### Manual Install (No Docker)
-
-If you prefer running directly on host:
+If you prefer to set up manually:
 
 ```bash
-# Prerequisites
+# 1. Install prerequisites
 pip install mitmproxy
 npm install -g @anthropic-ai/claude-code
 # Linux only: sudo apt install bubblewrap
 
-# Configure targets
-cp mitmproxy-ai-tool/.claude/settings-profiles/settings-development.json \
-   mitmproxy-ai-tool/.claude/settings.json
+# 2. Add /etc/hosts entry for Juice Shop
+echo "127.0.0.1 juiceshop" | sudo tee -a /etc/hosts
 
-# Launch
+# 3. Start Juice Shop
+docker compose up -d
+
+# 4. Launch
 cd mitmproxy-ai-tool
 claude
 ```
@@ -300,14 +290,13 @@ cp mitmproxy-ai-tool/.claude/settings-profiles/settings-development.json \
 |---------|----------|
 | `settings-lockdown.json` | Analysis only — Claude API, no targets |
 | `settings-engagement.json.template` | Active engagement — replace TARGET placeholders |
-| `settings-development.json` | Local targets (Juice Shop, localhost) |
-| `settings-docker.json` | Docker deployment (weaker nested sandbox) |
+| `settings-development.json` | Local targets (Juice Shop via /etc/hosts) |
 
 ---
 
 ### Launch Flags
 
-When launching Claude manually (not via `docker compose exec`):
+Optional flags for advanced usage:
 
 ```bash
 cd mitmproxy-ai-tool
@@ -353,11 +342,11 @@ The agent will:
 ```
 llmitm/
 ├── README.md                        # This file
-├── Dockerfile                       # Container build
-├── docker-compose.yml               # Orchestrator (Juice Shop + agent)
+├── setup.sh                         # Setup script (deps, /etc/hosts, Juice Shop)
+├── docker-compose.yml               # Juice Shop only
 ├── .env.example                     # API key config
 │
-└── mitmproxy-ai-tool/               # Agent workspace
+└── mitmproxy-ai-tool/               # Agent workspace (Claude Code runs here)
     ├── .claude/
     │   ├── agents/
     │   │   └── llmitm.md            # Agent system prompt
@@ -371,8 +360,7 @@ llmitm/
     │   └── settings-profiles/       # Pre-built profiles
     │       ├── settings-lockdown.json
     │       ├── settings-engagement.json.template
-    │       ├── settings-development.json
-    │       └── settings-docker.json
+    │       └── settings-development.json
     ├── captures/                    # Traffic files (.mitm)
     ├── certs/                       # mitmproxy CA certificates
     ├── CLAUDE.md                    # Agent playbook (cross-linked)
@@ -383,7 +371,7 @@ llmitm/
         └── [deeper guides]
 ```
 
-**Security boundary**: `settings.json` controls what domains are reachable. Sandbox enforces this at OS level.
+**Security boundary**: `settings.json` controls what domains are reachable. Claude Code's sandbox (bubblewrap/Seatbelt) enforces this at OS level on the host.
 
 ---
 
@@ -431,14 +419,14 @@ curl -I https://google.com
 
 ## Docker Details
 
-Docker handles **deployment** (install deps + start Juice Shop). Sandbox handles **security** (network isolation, filesystem jail). Two different jobs.
+Docker's only job is running Juice Shop. Claude Code and its sandbox run **on the host**, not inside Docker.
 
 ```bash
-docker compose up -d        # Starts Juice Shop + agent container
-docker compose exec llmitm claude  # Enter the agent
+docker compose up -d        # Starts Juice Shop on port 3000
+docker compose down          # Stops Juice Shop
 ```
 
-The Docker settings profile (`settings-docker.json`) enables `enableWeakerNestedSandbox: true` since bubblewrap has limited capabilities inside Docker.
+The `/etc/hosts` entry (`127.0.0.1 juiceshop`) maps the hostname to localhost. Docker's port mapping (`3000:3000`) forwards to the container. The sandbox proxy resolves `juiceshop` from the host's `/etc/hosts` since it runs outside the sandbox.
 
 ---
 
@@ -506,21 +494,24 @@ Example: `~d target.com & ~m POST & !~u /logout`
 ## Common Commands
 
 ```bash
-# Capture
-mitmdump -w traffic.mitm "~d target.com"
+# Probe with curl (respects HTTP_PROXY automatically inside sandbox)
+curl http://juiceshop:3000/api/...
 
-# Analyze (read offline)
-mitmdump -nr traffic.mitm --flow-detail 3
+# Capture via mitmdump (needs upstream proxy in sandbox)
+mitmdump --mode upstream:$HTTP_PROXY -p 8080 -w captures/traffic.mitm &
+curl -x http://localhost:8080 http://juiceshop:3000/api/...
 
-# IDOR test (swap user ID)
-mitmdump -nr traffic.mitm -B "/user_id=123/user_id=456" -w idor.mitm
-mitmdump -C idor.mitm --flow-detail 3
+# Analyze (read offline — no network needed)
+mitmdump -nr captures/traffic.mitm --flow-detail 3
 
-# Find sensitive data
-mitmdump -nr traffic.mitm "~bs password|token|api_key|secret" --flow-detail 3
+# IDOR test (swap user ID — offline mutation)
+mitmdump -nr captures/traffic.mitm -B "/user_id=123/user_id=456" -w captures/idor.mitm
 
-# Inject header
-mitmdump -C traffic.mitm -H "/~q/X-User-Role/admin" --flow-detail 3
+# Replay with upstream proxy
+mitmdump --mode upstream:$HTTP_PROXY -C captures/idor.mitm --flow-detail 3
+
+# Find sensitive data (offline)
+mitmdump -nr captures/traffic.mitm "~bs password|token|api_key|secret" --flow-detail 3
 ```
 
 ---
@@ -541,16 +532,16 @@ mitmdump -C traffic.mitm -H "/~q/X-User-Role/admin" --flow-detail 3
 When you find a vulnerability:
 
 ```bash
-# 1. Capture the request
-mitmdump -nr session.mitm "~u /vulnerable/endpoint" -w evidence-001.mitm
+# 1. Extract the vulnerable request (offline)
+mitmdump -nr captures/session.mitm "~u /vulnerable/endpoint" -w captures/evidence-001.mitm
 
-# 2. Document reproduction
-mitmdump -C evidence-001.mitm -B "/id=1/id=999" --flow-detail 4
+# 2. Document reproduction (needs upstream proxy for replay)
+mitmdump --mode upstream:$HTTP_PROXY -C captures/evidence-001.mitm -B "/id=1/id=999" --flow-detail 4
 
 # 3. Show before/after
-mitmdump -nr evidence-001.mitm --flow-detail 3 > before.txt
-mitmdump -C evidence-001.mitm -B "/id=1/id=999" -w exploited.mitm
-mitmdump -nr exploited.mitm --flow-detail 3 > after.txt
+mitmdump -nr captures/evidence-001.mitm --flow-detail 3 > before.txt
+mitmdump --mode upstream:$HTTP_PROXY -C captures/evidence-001.mitm -B "/id=1/id=999" -w captures/exploited.mitm
+mitmdump -nr captures/exploited.mitm --flow-detail 3 > after.txt
 diff before.txt after.txt
 ```
 
@@ -558,21 +549,41 @@ Report findings to `findings.md` with reproducible commands.
 
 ---
 
-## Migrating from v1.0 (Docker Architecture)
+## Migrating from Previous Versions
 
+### From v1.5 (Docker agent container)
+1. Delete local Dockerfile (no longer needed)
+2. Add `/etc/hosts` entry: `echo "127.0.0.1 juiceshop" | sudo tee -a /etc/hosts`
+3. `docker compose up -d` now only starts Juice Shop
+4. Run Claude Code on host: `cd mitmproxy-ai-tool && claude`
+
+### From v1.0 (Docker two-container + firewall sidecar)
 1. `TARGET_DOMAINS` from `.env` → `allowedDomains` in `settings.json`
-2. `./launch.sh` → `docker compose up -d && docker compose exec llmitm claude`
-3. Docker two-container setup (firewall sidecar) → Single container + sandbox
+2. `./launch.sh` → `./setup.sh && cd mitmproxy-ai-tool && claude`
+3. Docker two-container setup → Host-native sandbox + Docker Juice Shop only
 4. Rollback: `git checkout v1.0-final`
 
 ---
 
 ## Troubleshooting
 
-### Agent can't reach target
+### Agent can't reach Juice Shop
+1. Verify `/etc/hosts` has `127.0.0.1 juiceshop`: `grep juiceshop /etc/hosts`
+2. Verify Juice Shop is running: `curl http://juiceshop:3000/`
+3. Check `allowedDomains` in `settings.json` includes `juiceshop`
+4. Restart Claude Code session (settings not hot-reloaded)
+
+### Agent can't reach any target
 1. Check `allowedDomains` in `settings.json`
 2. Restart Claude Code session (settings not hot-reloaded)
-3. Verify sandbox is enabled: look for proxy env vars in Bash output
+3. Verify sandbox is enabled: look for `HTTP_PROXY` env var in Bash output
+
+### mitmdump can't reach targets
+mitmdump does NOT respect `HTTP_PROXY`/`HTTPS_PROXY`. For network operations, use:
+```bash
+mitmdump --mode upstream:$HTTP_PROXY -p 8080 -w captures/session.mitm
+```
+Offline operations (`-nr`, `-B`) don't need network and work as-is.
 
 ### Sandbox not working (Linux)
 1. Check bubblewrap: `which bwrap`

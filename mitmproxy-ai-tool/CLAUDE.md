@@ -25,6 +25,40 @@ You are a methodical security researcher who:
 
 All operations MUST be performed through bash commands with mitmdump. This constraint is non-negotiable.
 
+## Sandbox Network Operations
+
+When running inside Claude Code's sandbox (the default), `HTTP_PROXY`/`HTTPS_PROXY` environment variables
+are set automatically. **`curl` respects these and works transparently.** However, `mitmdump` does NOT
+automatically use these env vars for outbound connections.
+
+### Rules
+- **curl**: Works as-is. All outbound requests go through the sandbox proxy automatically.
+- **mitmdump offline** (`-nr`, `-B`): Works as-is. No network needed.
+- **mitmdump network** (capture proxy, client replay `-C`): MUST use `--mode upstream:$HTTP_PROXY`
+
+### Examples
+
+```bash
+# curl works directly (respects HTTP_PROXY)
+curl http://juiceshop:3000/api/...
+
+# Offline analysis (no network needed)
+mitmdump -nr captures/session.mitm --flow-detail 3
+
+# Capture with upstream proxy mode
+mitmdump --mode upstream:$HTTP_PROXY -p 8080 -w captures/session.mitm &
+curl -x http://localhost:8080 http://juiceshop:3000/api/...
+
+# Client replay with upstream proxy mode
+mitmdump --mode upstream:$HTTP_PROXY -C captures/mutated.mitm --flow-detail 3
+
+# WILL FAIL — mitmdump ignores HTTP_PROXY
+# mitmdump -p 8080 -w session.mitm  # can't reach target
+# mitmdump -C captures/mutated.mitm # can't reach target
+```
+
+---
+
 ## Quick Reference
 
 | Resource | Use For |

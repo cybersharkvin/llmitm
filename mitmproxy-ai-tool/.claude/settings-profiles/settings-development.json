@@ -16,6 +16,7 @@
     "enabled": true,
     "autoAllowBashIfSandboxed": true,
     "allowUnsandboxedCommands": false,
+    "enableWeakerNestedSandbox": true,
     "network": {
       "allowedDomains": [
         "api.anthropic.com",
@@ -25,9 +26,9 @@
         "statsig.anthropic.com",
         "sentry.io",
         "*.sentry.io",
-        "localhost",
-        "127.0.0.1"
-      ]
+        "juiceshop"
+      ],
+      "allowLocalBinding": true
     }
   }
 }
